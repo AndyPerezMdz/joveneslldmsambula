@@ -1,6 +1,7 @@
 import { type NextRequest } from "next/server";
 import { dentroDeLaCarpeta, driveListo, imagenDrive } from "@/lib/drive";
 import { getSesion } from "@/lib/supabase/server";
+import { enEquipo } from "@/lib/tipos";
 
 // Visor de fotos: el navegador nunca habla con Drive directo.
 //   /api/foto/ID         → miniatura (600 px)
@@ -9,6 +10,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
   const { user, perfil } = await getSesion();
   if (!user || !perfil) return new Response("Sin sesión", { status: 401 });
+  // Fotos: equipo de evidencias. Tickets: equipo de finanzas.
+  if (!enEquipo(perfil, "evidencias") && !enEquipo(perfil, "finanzas")) return new Response("Sin permiso", { status: 403 });
   if (!driveListo() || !/^[\w-]{10,}$/.test(id)) return new Response("No encontrado", { status: 404 });
   if (!(await dentroDeLaCarpeta(id))) return new Response("No encontrado", { status: 404 });
 

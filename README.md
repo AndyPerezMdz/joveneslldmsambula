@@ -31,12 +31,17 @@ seguido arriba) y se arma la alerta de quién lleva 3 semanas o más sin venir.
 
 | Rol | Qué puede hacer |
 |---|---|
-| `admin` | Todo, más la pantalla **Equipo** (roles y equipos de cada cuenta). Los correos de `correos_admin` entran como admin solos. |
-| `encargado` | Todo lo de todos los equipos. |
-| `joven` | Ve las actividades y **su** asistencia. Si está en un equipo, además lo de ese equipo. |
+| `admin` | Todo, más la pantalla **Equipo**. Los correos de `correos_admin` entran como admin solos. No sale en la lista de Jóvenes. |
+| `encargado` | Asistencia, actividades y reportes. **No** ve finanzas ni evidencias a menos que esté en ese equipo. |
+| `joven` | Ve las actividades, **su** asistencia y lo que le falta cooperar. Si está en un equipo, además lo de ese equipo. |
 
 Equipos (`perfiles.equipos`, puede tener varios): `asistencia` (pasa lista, mantiene la lista de jóvenes),
-`finanzas`, `evidencias`. Cualquiera que esté en un equipo puede crear actividades.
+`finanzas` (solo ellos y admins ven el dinero), `evidencias` (solo ellos y admins ven las fotos).
+Cualquiera que esté en un equipo puede crear actividades.
+
+**Todos los que crean cuenta aparecen en Jóvenes** (`asegurar_ficha`): se ligan a su ficha por correo,
+luego por nombre, y si no hay, se les crea una. Si alguien quedó repetido ("Andy" y "Andrés Pérez"),
+en Jóvenes → su ficha → **Juntar con…** (`fusionar_jovenes`) se pasa su asistencia y pagos a una sola.
 
 ## Finanzas
 

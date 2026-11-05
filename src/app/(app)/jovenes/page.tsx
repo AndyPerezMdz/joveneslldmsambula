@@ -8,7 +8,7 @@ import { normalizar } from "@/lib/nombres";
 import { requerir } from "@/lib/supabase/server";
 import { enEquipo, SEMANAS_ALERTA, type ResumenJoven } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
-import { actualizarJoven, borrarJoven, crearJoven } from "./actions";
+import { actualizarJoven, borrarJoven, crearJoven, fusionarJoven } from "./actions";
 
 export const metadata = { title: "Jóvenes" };
 
@@ -111,6 +111,21 @@ export default async function Jovenes({ searchParams }: { searchParams: Promise<
                             </label>
                             <Submit>Guardar</Submit>
                           </div>
+                        </Formulario>
+                        <Formulario action={fusionarJoven} className="mt-4 flex flex-wrap items-end gap-2 border-t border-stone-200/70 pt-4">
+                          <input type="hidden" name="id" value={j.joven_id} />
+                          <label className={`${ui.label} min-w-48 flex-1`}>
+                            ¿Está repetido? Juntar con…
+                            <select name="origen" required defaultValue="" className={`${ui.input} h-10`}>
+                              <option value="" disabled>Elige la otra ficha</option>
+                              {todos.filter((o) => o.joven_id !== j.joven_id).map((o) => (
+                                <option key={o.joven_id} value={o.joven_id}>{o.nombre}{fichas.get(o.joven_id)?.perfil_id ? " (con cuenta)" : ""}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <Submit variante="btnSec" confirmar={`¿Juntar esa ficha con ${j.nombre}? Se queda este nombre, con la asistencia y los pagos de las dos. La otra ficha desaparece.`}>
+                            Juntar
+                          </Submit>
                         </Formulario>
                         <Formulario action={borrarJoven} className="mt-3 flex justify-end">
                           <input type="hidden" name="id" value={j.joven_id} />

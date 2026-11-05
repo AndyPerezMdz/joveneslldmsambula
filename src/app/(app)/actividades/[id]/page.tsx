@@ -44,7 +44,7 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
 
   // Fotos de esta actividad (desde Drive)
   let fotos: Foto[] = [];
-  if (driveListo()) {
+  if (driveListo() && enEquipo(perfil, "evidencias")) {
     try {
       const todas = await fotosDrive();
       const delDia = todas.filter((f) => f.fecha === a.fecha);

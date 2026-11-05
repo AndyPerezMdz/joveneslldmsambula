@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Album } from "@/components/Album";
 import { driveListo, espacioDrive, fotosDrive, repartir, type Foto } from "@/lib/drive";
 import { fechaLarga, partesFecha } from "@/lib/fechas";
-import { requerirMiembro } from "@/lib/supabase/server";
+import { requerir } from "@/lib/supabase/server";
 import { enEquipo, tipo, type Actividad } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 
@@ -11,8 +11,8 @@ export const metadata = { title: "Evidencias" };
 const gb = (b: number) => `${(b / 1024 ** 3).toFixed(1)} GB`;
 
 export default async function Evidencias() {
-  const { supabase, perfil } = await requerirMiembro();
-  const sube = enEquipo(perfil, "evidencias");
+  const { supabase } = await requerir((p) => enEquipo(p, "evidencias"));
+  const sube = true;
 
   if (!driveListo()) {
     return (

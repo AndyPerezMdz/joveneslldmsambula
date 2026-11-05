@@ -108,7 +108,8 @@ export default async function Reportes({ searchParams }: { searchParams: Promise
   // ---------- Fotos ----------
   let fotosMes: Foto[] = [];
   let album = new Map<string, Foto[]>();
-  if (driveListo()) {
+  const verFotos = enEquipo(perfil, "evidencias");
+  if (driveListo() && verFotos) {
     try {
       fotosMes = (await fotosDrive()).filter((f) => f.fecha >= ini && f.fecha < fin);
       album = repartir(fotosMes, acts).album;
@@ -147,7 +148,7 @@ export default async function Reportes({ searchParams }: { searchParams: Promise
             <table className="w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-wider text-stone-500">
                 <tr className="border-b border-stone-200"><th className="py-2 pr-3">Fecha</th><th className="py-2 pr-3">Actividad</th><th className="py-2 pr-3">Tipo</th>
-                  {verAsis && <th className="py-2 text-right">Vinieron</th>}<th className="py-2 pl-3 text-right">Fotos</th></tr>
+                  {verAsis && <th className="py-2 text-right">Vinieron</th>}{verFotos && <th className="py-2 pl-3 text-right">Fotos</th>}</tr>
               </thead>
               <tbody className="divide-y divide-stone-200/70">
                 {acts.map((a) => (
@@ -156,7 +157,7 @@ export default async function Reportes({ searchParams }: { searchParams: Promise
                     <td className="py-2 pr-3 font-medium">{a.titulo}</td>
                     <td className="py-2 pr-3 text-stone-500">{tipo(a.tipo).n}</td>
                     {verAsis && <td className="py-2 text-right tabular-nums">{a.fecha <= h ? a.asistencias[0]?.count ?? 0 : "—"}</td>}
-                    <td className="py-2 pl-3 text-right tabular-nums text-stone-500">{album.get(a.id)?.length ?? 0}</td>
+                    {verFotos && <td className="py-2 pl-3 text-right tabular-nums text-stone-500">{album.get(a.id)?.length ?? 0}</td>}
                   </tr>
                 ))}
               </tbody>
@@ -243,7 +244,7 @@ export default async function Reportes({ searchParams }: { searchParams: Promise
         </Seccion>
       )}
 
-      {driveListo() && (
+      {driveListo() && verFotos && (
         <Seccion titulo="Evidencias">
           <p className="text-sm">
             <b className="tabular-nums">{fotosMes.length}</b> fotos este mes

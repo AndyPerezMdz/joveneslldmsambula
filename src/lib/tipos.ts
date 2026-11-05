@@ -51,8 +51,12 @@ export const SEMANAS_ALERTA = 3;
 type P = Pick<Perfil, "rol" | "equipos"> | null | undefined;
 export const esAdmin = (p: P) => p?.rol === "admin";
 export const esEncargado = (p: P) => p?.rol === "admin" || p?.rol === "encargado";
-/** Encargados cuentan como parte de todos los equipos (igual que en la base). */
-export const enEquipo = (p: P, e: Equipo) => !!p && (esEncargado(p) || p.equipos.includes(e));
+/**
+ * Igual que en la base (en_equipo): admin entra a todo; encargados, solo a asistencia;
+ * finanzas y evidencias, solo quien esté en ese equipo.
+ */
+export const enEquipo = (p: P, e: Equipo) =>
+  !!p && (esAdmin(p) || (e === "asistencia" && esEncargado(p)) || p.equipos.includes(e));
 /** Cualquiera de un equipo puede crear actividades. */
 export const puedeOrganizar = (p: P) => !!p && (esEncargado(p) || p.equipos.length > 0);
 

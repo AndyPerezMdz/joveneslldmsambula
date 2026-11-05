@@ -37,3 +37,14 @@ export async function borrarJoven(_p: Resultado, fd: FormData): Promise<Resultad
     revalidatePath("/", "layout");
   }, "Borrado.");
 }
+
+/** Dos fichas de la misma persona: se queda esta (id) y absorbe a la otra (origen). */
+export async function fusionarJoven(_p: Resultado, fd: FormData): Promise<Resultado> {
+  return intentar(async () => {
+    const { supabase } = await clienteCon(permiso);
+    const origen = txt(fd, "origen");
+    if (!origen) throw new Error("Elige la ficha repetida.");
+    ok((await supabase.rpc("fusionar_jovenes", { p_origen: origen, p_destino: txt(fd, "id") })).error);
+    revalidatePath("/", "layout");
+  }, "Fichas juntadas.");
+}

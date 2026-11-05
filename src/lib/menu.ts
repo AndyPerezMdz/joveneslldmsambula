@@ -10,7 +10,7 @@ export function menuPara(p: Perfil): ItemMenu[] {
     { href: "/actividades", n: "Actividades", icono: "actividades" as const },
     ...(enEquipo(p, "asistencia") ? [{ href: "/jovenes", n: "Jóvenes", icono: "jovenes" as const }] : []),
     ...(enEquipo(p, "finanzas") ? [{ href: "/finanzas", n: "Finanzas", icono: "finanzas" as const }] : []),
-    { href: "/evidencias", n: "Evidencias", icono: "evidencias" as const },
+    ...(enEquipo(p, "evidencias") ? [{ href: "/evidencias", n: "Evidencias", icono: "evidencias" as const }] : []),
     ...(esEncargado(p) || enEquipo(p, "finanzas") ? [{ href: "/reportes", n: "Reportes", icono: "reportes" as const }] : []),
     ...(esAdmin(p) ? [{ href: "/equipo", n: "Equipo", icono: "equipo" as const }] : []),
   ];

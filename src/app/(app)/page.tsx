@@ -8,7 +8,7 @@ import { driveListo, espacioDrive, fotosDrive, type Foto } from "@/lib/drive";
 import { fechaLarga, haceCuanto, hoy, semanasEntre, sumarDias } from "@/lib/fechas";
 import { asistenciaEntre, lunes } from "@/lib/resumen";
 import { requerirMiembro } from "@/lib/supabase/server";
-import { enEquipo, esEncargado, puedeOrganizar, SEMANAS_ALERTA, type Actividad, type ResumenJoven } from "@/lib/tipos";
+import { enEquipo, puedeOrganizar, SEMANAS_ALERTA, type Actividad, type ResumenJoven } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 
 export const metadata = { title: "Inicio" };
@@ -20,7 +20,6 @@ export default async function Inicio() {
   const h = hoy();
   const veLista = enEquipo(perfil, "asistencia");
   const veDinero = enEquipo(perfil, "finanzas");
-  const encargado = esEncargado(perfil);
 
   const [{ data: acts }, { data: mc }, { data: ficha }] = await Promise.all([
     supabase.from("actividades").select("id, titulo, tipo, fecha, hora, lugar, notas")
@@ -75,9 +74,10 @@ export default async function Inicio() {
   let fotos: Foto[] = [];
   let fotosMes = 0;
   let drive: { usado: number; limite: number | null } | null = null;
-  if (driveListo()) {
+  const veFotos = enEquipo(perfil, "evidencias");
+  if (driveListo() && veFotos) {
     try {
-      const [fs, e] = await Promise.all([fotosDrive(), encargado ? espacioDrive() : Promise.resolve(null)]);
+      const [fs, e] = await Promise.all([fotosDrive(), espacioDrive()]);
       fotos = fs.slice(-6).reverse();
       fotosMes = fs.filter((f) => f.fecha.startsWith(h.slice(0, 7))).length;
       drive = e;
@@ -90,7 +90,7 @@ export default async function Inicio() {
       { etiqueta: "Jóvenes activos", valor: String(activos.length), detalle: perdidos.length ? `${perdidos.length} sin venir` : "todos vienen", href: "/jovenes" },
     ] : []),
     ...(veDinero && saldo !== null ? [{ etiqueta: "Saldo", valor: pesos(saldo), detalle: coops.length === 1 ? "1 cooperación abierta" : `${coops.length} cooperaciones abiertas`, href: "/finanzas" }] : []),
-    ...(driveListo() && (encargado || enEquipo(perfil, "evidencias")) ? [{ etiqueta: "Fotos este mes", valor: String(fotosMes), href: "/evidencias" }] : []),
+    ...(driveListo() && veFotos ? [{ etiqueta: "Fotos este mes", valor: String(fotosMes), href: "/evidencias" }] : []),
     ...(yo ? [{ etiqueta: "Tu asistencia", valor: String(yo.recientes), detalle: "actividades en 8 semanas" }] : []),
     ...(!veDinero && pendientes.length ? [{ etiqueta: "Te falta cooperar", valor: pesos(pendientes.reduce((s, c) => s + c.falta, 0)), color: "text-oro" }] : []),
   ];

@@ -483,3 +483,166 @@ create policy "categorias_leer"     on public.categorias for select to authentic
 create policy "categorias_escribir" on public.categorias for all    to authenticated
   using (public.en_equipo('finanzas')) with check (public.en_equipo('finanzas'));
 grant select, insert, update, delete on public.categorias to authenticated;
+
+-- ============================================================
+-- 10. PERMISOS POR EQUIPO + TODOS LOS REGISTRADOS SON JÓVENES
+--   · Finanzas  → solo admin y equipo de finanzas.
+--   · Evidencias → solo admin y equipo de evidencias.
+--   · Asistencia → admin, encargados y equipo de asistencia.
+--   · Quien crea cuenta aparece en Jóvenes (los admins no).
+--   (Estas definiciones reemplazan a las de arriba.)
+-- ============================================================
+create or replace function public.en_equipo(e public.equipo)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.es_admin()
+      or (e = 'asistencia' and public.es_encargado())
+      or coalesce((select e = any (equipos) from public.perfiles where id = auth.uid()), false)
+$$;
+
+-- La lista de jóvenes no incluye a los admins
+create or replace function public.resumen_jovenes(p_semanas int default 8)
+returns table (joven_id uuid, nombre text, activo boolean, recientes int, total int, ultima date)
+language sql stable security invoker set search_path = public as $$
+  select j.id, j.nombre, j.activo,
+         count(act.id) filter (where act.fecha >= public.hoy() - p_semanas * 7)::int,
+         count(act.id)::int,
+         max(act.fecha)
+    from public.jovenes j
+    left join public.asistencias a on a.joven_id = j.id
+    left join public.actividades act on act.id = a.actividad_id and act.fecha <= public.hoy()
+   where not exists (select 1 from public.perfiles p where p.id = j.perfil_id and p.rol = 'admin')
+   group by j.id, j.nombre, j.activo
+$$;
+
+-- Ligar una cuenta con su ficha (por correo, luego por nombre) o crearle una
+create or replace function public.asegurar_ficha(p_perfil uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  p public.perfiles;
+  v uuid;
+begin
+  select * into p from public.perfiles where id = p_perfil;
+  if not found then return null; end if;
+  select id into v from public.jovenes where perfil_id = p.id;
+  if found then return v; end if;
+
+  update public.jovenes set perfil_id = p.id
+   where id = (select id from public.jovenes where perfil_id is null and email = p.email limit 1)
+  returning id into v;
+  if v is not null then return v; end if;
+
+  if (select count(*) from public.jovenes
+       where perfil_id is null and public.normalizar_nombre(nombre) = public.normalizar_nombre(p.nombre)) = 1 then
+    update public.jovenes set perfil_id = p.id
+     where perfil_id is null and public.normalizar_nombre(nombre) = public.normalizar_nombre(p.nombre)
+    returning id into v;
+    return v;
+  end if;
+
+  -- Nombre válido (Apple a veces no manda nada) y, si ya hay alguien que se llama igual,
+  -- se le agrega su correo para distinguirlos. Nunca debe tumbar un registro.
+  begin
+    insert into public.jovenes (nombre, email, perfil_id)
+    values (case when length(trim(p.nombre)) > 1 then trim(p.nombre) else 'Sin nombre' end, p.email, p.id)
+    returning id into v;
+  exception when unique_violation then
+    begin
+      insert into public.jovenes (nombre, email, perfil_id)
+      values (case when length(trim(p.nombre)) > 1 then trim(p.nombre) else 'Sin nombre' end || ' (' || split_part(coalesce(p.email, p.id::text), '@', 1) || ')', p.email, p.id)
+      returning id into v;
+    exception when others then v := null;
+    end;
+  when others then v := null;
+  end;
+  return v;
+end $$;
+revoke all on function public.asegurar_ficha(uuid) from public, anon, authenticated;
+
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.perfiles (id, nombre, email, rol)
+  values (
+    new.id,
+    coalesce(nullif(trim(new.raw_user_meta_data ->> 'nombre'), ''),
+             nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
+             nullif(trim(new.raw_user_meta_data ->> 'name'), ''),
+             split_part(new.email, '@', 1)),
+    lower(new.email),
+    case when exists (select 1 from public.correos_admin where email = lower(new.email))
+         then 'admin'::public.rol_app else 'joven' end
+  )
+  on conflict (id) do nothing;
+  perform public.asegurar_ficha(new.id);
+  return new;
+end $$;
+
+-- Cuentas que ya existían sin ficha
+do $$ declare r record; begin
+  for r in select p.id from public.perfiles p where not exists (select 1 from public.jovenes j where j.perfil_id = p.id) loop
+    perform public.asegurar_ficha(r.id);
+  end loop;
+end $$;
+
+-- ---------- Fusionar fichas repetidas ("Andy" y "Andrés Pérez" son la misma persona) ----------
+-- Se queda con p_destino; le pasa asistencia, pagos, exclusiones, cuenta y datos de p_origen.
+create or replace function public.fusionar_jovenes(p_origen uuid, p_destino uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare o public.jovenes; d public.jovenes;
+begin
+  if not public.en_equipo('asistencia') then raise exception 'No tienes permiso para hacer eso.'; end if;
+  if p_origen = p_destino then raise exception 'Elige a otra persona.'; end if;
+  select * into o from public.jovenes where id = p_origen;
+  select * into d from public.jovenes where id = p_destino;
+  if o.id is null or d.id is null then raise exception 'No se encontró a uno de los dos.'; end if;
+  if o.perfil_id is not null and d.perfil_id is not null then
+    raise exception 'Los dos tienen cuenta: no se pueden juntar.';
+  end if;
+
+  insert into public.asistencias (actividad_id, joven_id, marcado_por, created_at)
+  select actividad_id, p_destino, marcado_por, created_at from public.asistencias where joven_id = p_origen
+  on conflict do nothing;
+  insert into public.cooperacion_excluidos (cooperacion_id, joven_id)
+  select cooperacion_id, p_destino from public.cooperacion_excluidos where joven_id = p_origen
+  on conflict do nothing;
+
+  perform set_config('jovenes.fusion', 'si', true);   -- deja pasar el candado de movimientos
+  update public.movimientos set joven_id = p_destino where joven_id = p_origen;
+
+  update public.jovenes set perfil_id = null where id = p_origen;
+  update public.jovenes set
+    perfil_id = coalesce(d.perfil_id, o.perfil_id),
+    email     = coalesce(d.email, o.email),
+    telefono  = coalesce(d.telefono, o.telefono),
+    activo    = d.activo or o.activo
+  where id = p_destino;
+  delete from public.jovenes where id = p_origen;
+end $$;
+grant execute on function public.fusionar_jovenes(uuid, uuid) to authenticated;
+
+-- Candado de movimientos: igual que antes, pero deja pasar la fusión de fichas
+create or replace function public.proteger_movimientos()
+returns trigger language plpgsql as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'Los movimientos no se borran: anúlalo con un motivo.';
+  end if;
+  if current_setting('jovenes.fusion', true) = 'si' then
+    return new;
+  end if;
+  if old.anulado then
+    raise exception 'Ese movimiento ya está anulado.';
+  end if;
+  if (new.tipo, new.categoria, new.concepto, new.monto, new.fecha, new.actividad_id,
+      new.cooperacion_id, new.joven_id, new.registrado_por, new.created_at)
+     is distinct from
+     (old.tipo, old.categoria, old.concepto, old.monto, old.fecha, old.actividad_id,
+      old.cooperacion_id, old.joven_id, old.registrado_por, old.created_at) then
+    raise exception 'Los movimientos no se editan: anúlalo y regístralo de nuevo.';
+  end if;
+  if new.anulado then
+    new.anulado_por := auth.uid();
+    new.anulado_at  := now();
+  end if;
+  return new;
+end $$;
