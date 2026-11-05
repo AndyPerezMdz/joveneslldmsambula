@@ -48,7 +48,7 @@ desde la misma pantalla y queda marcado.
 2. **Auth → URL Configuration:** Site URL = tu dominio (o `http://localhost:3000`).
 3. **Auth → Email Templates → Confirm signup:** el link debe ser
    `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`
-4. **Google y Apple** (ver abajo). Si no los configuras, los botones dan error pero el correo sigue funcionando.
+4. **Correos** (ver abajo).
 5. Regístrate en `/registro`. Si tu correo está en `correos_admin`, ya entras como admin.
 6. Local:
    ```powershell
@@ -62,17 +62,16 @@ desde la misma pantalla y queda marcado.
 Todo vive en **`supabase/jovenes.sql`**. Cuando algo cambie, se edita ese archivo y se vuelve a
 correr completo en el SQL Editor.
 
-## Entrar con Google y Apple
 
-En **Supabase → Auth → URL Configuration → Redirect URLs** agrega:
-`https://TU-DOMINIO/auth/callback` y `http://localhost:3000/auth/callback`.
+## Correos
 
-**Google:** Google Cloud Console → APIs y servicios → Credenciales → Crear ID de cliente OAuth
-(Aplicación web). En *URI de redireccionamiento autorizados* pon el callback de Supabase
-(`https://<proyecto>.supabase.co/auth/v1/callback`). Pega Client ID y Secret en
-Supabase → Auth → Sign In / Providers → Google.
+Salen por **Resend** desde `laagendita.app` (Supabase → Authentication → Emails → SMTP Settings:
+host `smtp.resend.com`, puerto `465`, usuario `resend`, contraseña = API key de Resend).
 
-**Apple:** necesita cuenta de Apple Developer (de paga). Crea un Services ID con
-"Sign in with Apple", pon el mismo callback de Supabase como Return URL, genera la
-llave (.p8) y pega todo en Supabase → Auth → Sign In / Providers → Apple.
-Apple a veces no manda el nombre: se corrige en **Equipo**.
+Las plantillas están en `supabase/correos/`. Cada archivo dice arriba en qué plantilla de
+Supabase va y qué asunto lleva; se pega el HTML completo.
+
+| Archivo | Plantilla en Supabase |
+|---|---|
+| `confirmar-registro.html` | Confirm signup |
+| `restablecer-contrasena.html` | Reset password |

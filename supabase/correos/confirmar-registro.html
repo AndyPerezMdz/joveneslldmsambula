@@ -1,0 +1,71 @@
+<!-- Supabase → Authentication → Emails → Confirm signup -->
+<!-- Asunto: Confirma tu cuenta del grupo de jóvenes -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light only">
+<title>Confirma tu cuenta del grupo de jóvenes</title>
+</head>
+<body style="margin:0;padding:0;background:#f7f3eb;">
+<!-- Texto de vista previa (lo que se ve en la bandeja antes de abrirlo) -->
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#f7f3eb;">Un clic y ya puedes entrar a la app del grupo.</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f7f3eb;">
+  <tr>
+    <td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;">
+
+        <!-- Encabezado azul con el logo -->
+        <tr>
+          <td align="center" style="background:#0a3156;background-image:linear-gradient(180deg,#134574,#0a3156);border-radius:20px 20px 0 0;padding:28px 24px 22px;">
+            <img src="{{ .SiteURL }}/logo-claro.png" width="168" height="104" alt="La Luz del Mundo" style="display:block;width:168px;height:auto;border:0;">
+          </td>
+        </tr>
+        <!-- Línea dorada -->
+        <tr><td style="height:3px;line-height:3px;font-size:0;background:#c7ae6e;">&nbsp;</td></tr>
+
+        <!-- Cuerpo -->
+        <tr>
+          <td style="background:#ffffff;border-radius:0 0 20px 20px;padding:32px 28px 28px;font-family:Arial,Helvetica,sans-serif;color:#17202c;">
+            <p style="margin:0 0 6px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#a8925c;font-weight:bold;">Grupo de jóvenes · Sambulá</p>
+            <h1 style="margin:0 0 16px;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:1.25;color:#0a3156;font-weight:normal;">Confirma tu cuenta</h1>
+            <p style="margin:0 0 8px;font-size:15px;line-height:1.6;">{{ if .Data.nombre }}Hola, {{ .Data.nombre }}.{{ else }}Hola.{{ end }}</p>
+            <p style="margin:0 0 26px;font-size:15px;line-height:1.6;">Ya casi. Confirma tu correo y entras a la app del grupo de jóvenes: actividades, asistencia y todo lo demás.</p>
+
+            <!-- Botón (tabla para que se vea bien hasta en Outlook) -->
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 26px;">
+              <tr>
+                <td align="center" bgcolor="#0a3156" style="border-radius:12px;">
+                  <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email"
+                     style="display:inline-block;padding:14px 26px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;color:#ffffff;text-decoration:none;border-radius:12px;border-bottom:3px solid #c7ae6e;">
+                    Confirmar mi cuenta
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <p style="margin:0 0 6px;font-size:12px;line-height:1.5;color:#78716c;">¿El botón no funciona? Copia este enlace en tu navegador:</p>
+            <p style="margin:0 0 24px;font-size:12px;line-height:1.5;word-break:break-all;">
+              <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email" style="color:#a8925c;">{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email</a>
+            </p>
+
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr><td style="border-top:1px solid #ece6d8;padding-top:16px;font-size:12px;line-height:1.5;color:#78716c;">Si tú no creaste esta cuenta, ignora este correo: sin confirmar no pasa nada.</td></tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Pie -->
+        <tr>
+          <td align="center" style="padding:20px 16px 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1px;color:#a8925c;">
+            Colonia Sambulá · Mérida, Yucatán
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>

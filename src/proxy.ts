@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Next 16: "middleware" ahora se llama "proxy".
 // Refresca la sesión y saca a quien no tenga cuenta.
-const PUBLICAS = ["/login", "/registro", "/auth"];
+const PUBLICAS = ["/login", "/registro", "/recuperar", "/auth"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
