@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { leerMonto } from "@/lib/dinero";
+import { driveListo, subirTicket } from "@/lib/drive";
 import { bool, clienteCon, intentar, ok, opt, txt, type Resultado } from "@/lib/forms";
 import { CATEGORIAS, enEquipo, type CategoriaMov, type Perfil, type TipoMov } from "@/lib/tipos";
 
@@ -22,8 +23,18 @@ export async function registrarMovimiento(_p: Resultado, fd: FormData): Promise<
     if (!monto) throw new Error("Escribe un monto válido.");
     if (!fechaOk(fecha)) throw new Error("Elige la fecha.");
     if (!txt(fd, "concepto")) throw new Error("Escribe en qué se gastó o de dónde salió.");
+
+    // Foto del ticket → Drive (Evidencias/Tickets)
+    let comprobante: string | null = null;
+    const ticket = fd.get("ticket");
+    if (ticket instanceof File && ticket.size > 0) {
+      if (!ticket.type.startsWith("image/")) throw new Error("El ticket tiene que ser una foto.");
+      if (!driveListo()) throw new Error("El Drive no está conectado: guarda el movimiento sin foto.");
+      comprobante = await subirTicket(ticket, `${fecha} · ${txt(fd, "concepto")} · ${monto}.jpg`);
+    }
+
     ok((await supabase.from("movimientos").insert({
-      tipo, categoria, monto, fecha,
+      tipo, categoria, monto, fecha, comprobante,
       concepto: txt(fd, "concepto"),
       actividad_id: opt(fd, "actividad_id"),
     })).error);

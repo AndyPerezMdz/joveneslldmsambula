@@ -1,16 +1,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import { cerrarSesion } from "@/app/login/actions";
-import { enEquipo, esAdmin, type Perfil } from "@/lib/tipos";
+import { enEquipo, esAdmin, esEncargado, type Perfil } from "@/lib/tipos";
 import antorcha from "../../public/antorcha-clara.png";
 import { BotonTema } from "./BotonTema";
 import { NavLinks } from "./NavLinks";
 
 export function Nav({ perfil }: { perfil: Perfil }) {
   const links = [
+    ...(esEncargado(perfil) ? [{ href: "/panel", n: "Panel" }] : []),
     { href: "/", n: "Actividades" },
     ...(enEquipo(perfil, "asistencia") ? [{ href: "/jovenes", n: "Jóvenes" }] : []),
     ...(enEquipo(perfil, "finanzas") ? [{ href: "/finanzas", n: "Finanzas" }] : []),
+    { href: "/evidencias", n: "Evidencias" },
     ...(esAdmin(perfil) ? [{ href: "/equipo", n: "Equipo" }] : []),
   ];
   const inicial = perfil.nombre.trim().charAt(0).toUpperCase() || "?";

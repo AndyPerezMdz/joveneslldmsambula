@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CATEGORIAS, type TipoMov } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 
@@ -12,6 +12,34 @@ export function CamposMovimiento({ tipoInicial, fecha, actividades, actividad }:
   actividad?: string;
 }) {
   const [tipo, setTipo] = useState<TipoMov>(tipoInicial);
+  const [vista, setVista] = useState<string | null>(null);
+  const [aviso, setAviso] = useState<string | null>(null);
+  const archivo = useRef<HTMLInputElement>(null);
+
+  // Las fotos del celular pesan 3–5 MB: se achican aquí (1600 px, JPEG) antes de subir.
+  async function achicar(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    setAviso(null);
+    if (!f) return setVista(null);
+    try {
+      const img = await createImageBitmap(f);
+      const escala = Math.min(1, 1600 / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * escala);
+      c.height = Math.round(img.height * escala);
+      c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+      const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/jpeg", 0.8));
+      if (!blob) throw new Error();
+      const dt = new DataTransfer();
+      dt.items.add(new File([blob], "ticket.jpg", { type: "image/jpeg" }));
+      if (archivo.current) archivo.current.files = dt.files;
+      setVista(URL.createObjectURL(blob));
+    } catch {
+      setAviso("No se pudo leer esa foto. Intenta con otra.");
+      if (archivo.current) archivo.current.value = "";
+      setVista(null);
+    }
+  }
   const cats = CATEGORIAS.filter((c) => c.para === tipo || c.para === "ambos");
 
   return (
@@ -45,6 +73,18 @@ export function CamposMovimiento({ tipoInicial, fecha, actividades, actividad }:
         Concepto
         <input name="concepto" required placeholder={tipo === "entrada" ? "Venta de tamales, ofrenda especial…" : "Masa y hojas, gasolina…"} className={ui.input} />
       </label>
+      <div className={`${ui.label} sm:col-span-2`}>
+        Foto del ticket <span className="font-normal text-stone-400">(opcional)</span>
+        <label className="mt-1.5 flex cursor-pointer items-center gap-3 rounded-xl border border-dashed border-stone-300 bg-stone-50/80 p-3 font-normal hover:border-oro">
+          {vista
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={vista} alt="Ticket" className="size-16 rounded-lg object-cover" />
+            : <span className="flex size-16 items-center justify-center rounded-lg bg-superficie text-2xl text-stone-400">+</span>}
+          <span className="text-sm text-stone-500">{vista ? "Toca para cambiarla" : "Tómale foto o elígela de la galería"}</span>
+          <input ref={archivo} type="file" name="ticket" accept="image/*" capture="environment" onChange={achicar} className="sr-only" />
+        </label>
+        {aviso && <p className="mt-1 text-sm text-red-700">{aviso}</p>}
+      </div>
       <label className={ui.label}>
         Fecha
         <input name="fecha" type="date" required defaultValue={fecha} className={ui.input} />

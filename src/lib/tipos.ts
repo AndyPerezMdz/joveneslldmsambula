@@ -87,9 +87,10 @@ export type Movimiento = {
   joven_id: string | null;
   anulado: boolean;
   anulado_motivo: string | null;
+  comprobante: string | null;
 };
 export const SELECT_MOV =
-  "id, tipo, categoria, concepto, monto, fecha, actividad_id, cooperacion_id, joven_id, anulado, anulado_motivo";
+  "id, tipo, categoria, concepto, monto, fecha, actividad_id, cooperacion_id, joven_id, anulado, anulado_motivo, comprobante";
 
 export type Cooperacion = {
   id: string;

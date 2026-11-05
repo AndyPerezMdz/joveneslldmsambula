@@ -4,7 +4,9 @@ import { Formulario } from "@/components/Formulario";
 import { Submit } from "@/components/Submit";
 import { fechaLarga, horaBonita, hoy } from "@/lib/fechas";
 import { requerirMiembro } from "@/lib/supabase/server";
+import { Album } from "@/components/Album";
 import { pesos } from "@/lib/dinero";
+import { driveListo, fotosDrive, repartir, type Foto } from "@/lib/drive";
 import { enEquipo, puedeOrganizar, SELECT_MOV, tipo, type Actividad, type Movimiento, type ResumenJoven } from "@/lib/tipos";
 import { MovimientoFila } from "../../finanzas/MovimientoFila";
 import { ui } from "@/lib/ui";
@@ -40,6 +42,19 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
     lista = ((r ?? []) as ResumenJoven[]).filter((j) => j.activo || presentes.includes(j.joven_id));
   }
 
+  // Fotos de esta actividad (desde Drive)
+  let fotos: Foto[] = [];
+  if (driveListo()) {
+    try {
+      const todas = await fotosDrive();
+      const delDia = todas.filter((f) => f.fecha === a.fecha);
+      if (delDia.length) {
+        const { data: mismas } = await supabase.from("actividades").select("id, fecha, hora").eq("fecha", a.fecha);
+        fotos = repartir(delDia, mismas ?? []).album.get(a.id) ?? [];
+      }
+    } catch { /* si Drive falla, la actividad se ve igual */ }
+  }
+
   // Dinero de esta actividad (equipo de finanzas)
   const veDinero = enEquipo(perfil, "finanzas");
   let movs: Movimiento[] = [];
@@ -67,6 +82,13 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
         </p>
         {a.notas && <p className="mt-3 whitespace-pre-line text-sm">{a.notas}</p>}
       </div>
+
+      {fotos.length > 0 && (
+        <section className="space-y-3">
+          <h2 className={ui.h2}>Fotos ({fotos.length})</h2>
+          <Album fotos={fotos} />
+        </section>
+      )}
 
       {pasaLista && (
         <section className="space-y-3">

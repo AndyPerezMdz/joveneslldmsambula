@@ -429,3 +429,10 @@ language sql stable security invoker set search_path = public as $$
 $$;
 
 grant execute on function public.saldo(), public.estado_cooperacion(uuid), public.mis_cooperaciones() to authenticated;
+
+-- ============================================================
+-- 8. EVIDENCIAS (fase 3)
+--    Las fotos NO viven aquí: viven en Google Drive (carpeta Evidencias).
+--    La app las lee y las acomoda por fecha. Aquí solo va el ticket de cada gasto.
+-- ============================================================
+alter table public.movimientos add column if not exists comprobante text;   -- id del archivo en Drive (Evidencias/Tickets)

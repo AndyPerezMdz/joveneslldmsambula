@@ -23,6 +23,11 @@ export function MovimientoFila({ m, detalle, puedeAnular }: { m: Movimiento; det
           {m.anulado ? `Anulado: ${m.anulado_motivo}` : `${categoria(m.categoria)} · ${f.dia} ${f.mes}${detalle ? ` · ${detalle}` : ""}`}
         </span>
       </span>
+      {m.comprobante && (
+        <a href={`/api/foto/${m.comprobante}?t=full`} target="_blank" rel="noreferrer"
+          className="shrink-0 rounded-lg bg-oro-suave px-2 py-1 text-[11px] font-semibold text-titulo hover:bg-oro-claro"
+          title="Ver ticket">Ticket</a>
+      )}
       <span className={`shrink-0 font-semibold tabular-nums ${m.anulado ? "text-stone-400 line-through" : entrada ? "text-green-700" : "text-red-700"}`}>
         {entrada ? "+" : "−"}{pesos(m.monto)}
       </span>
