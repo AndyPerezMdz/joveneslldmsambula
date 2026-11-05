@@ -48,7 +48,7 @@ export default async function Reportes({ searchParams }: { searchParams: Promise
   let perdidos: ResumenJoven[] = [];
   if (verAsis) {
     const [{ data: a }, { data: asis }, { data: r }] = await Promise.all([
-      supabase.from("actividades").select("id, titulo, tipo, fecha, hora, lugar, notas, asistencias(count)")
+      supabase.from("actividades").select("id, titulo, tipo, fecha, hora, hora_fin, lugar, notas, horario_id, cancelada, asistencias(count)").eq("cancelada", false)
         .gte("fecha", ini).lt("fecha", fin).order("fecha").order("hora", { nullsFirst: true }),
       supabase.from("asistencias").select("joven_id, jovenes(nombre), actividades!inner(fecha)")
         .gte("actividades.fecha", ini).lt("actividades.fecha", fin),
@@ -67,7 +67,7 @@ export default async function Reportes({ searchParams }: { searchParams: Promise
       perdidos = ((r ?? []) as ResumenJoven[]).filter((j) => j.activo && j.ultima && semanasEntre(j.ultima, h) >= SEMANAS_ALERTA);
     }
   } else {
-    const { data: a } = await supabase.from("actividades").select("id, titulo, tipo, fecha, hora, lugar, notas").gte("fecha", ini).lt("fecha", fin).order("fecha");
+    const { data: a } = await supabase.from("actividades").select("id, titulo, tipo, fecha, hora, hora_fin, lugar, notas, horario_id, cancelada").eq("cancelada", false).gte("fecha", ini).lt("fecha", fin).order("fecha");
     acts = ((a ?? []) as Actividad[]).map((x) => ({ ...x, asistencias: [] }));
   }
   const cultos = acts.filter((a) => a.tipo === "culto" && a.fecha <= h);

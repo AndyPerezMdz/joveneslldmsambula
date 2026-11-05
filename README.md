@@ -98,6 +98,17 @@ registrar un movimiento ("+ Otra categoría…"). Las que no se usan se desactiv
 que ya se abrieron funcionan sin internet (el pase de lista guarda y manda después). Al salir de
 la cuenta se borra lo guardado en el celular.
 
+## Horarios fijos (`/actividades/horarios`, encargados)
+
+Oración de 5, Dominical, Servicio de alabanzas, Oración de 7 y Consagración apostólica están en la
+tabla `horarios` (días 1 = lunes … 7 = domingo). `generar_actividades(desde, hasta)` crea la
+actividad de cada día sin duplicar; la app la llama sola al abrir el Inicio o el calendario.
+Si se cambia un horario, las actividades que vienen y todavía no tienen asistencia se ajustan.
+Una actividad de horario fijo no se borra (se volvería a crear): se **cancela** y se puede reactivar.
+
+En **Actividades → Semana** se ve el calendario: en computadora los 7 días; en celular, un día a
+la vez (abre en hoy). En el Inicio, la tarjeta "Hoy" marca cuál va **Ahora** y cuál **Sigue**.
+
 ## Pase de lista
 
 Se marca con un toque y se guarda en segundo plano. Si no hay internet, los cambios se quedan

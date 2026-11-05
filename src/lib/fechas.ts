@@ -57,3 +57,8 @@ export function mesVecino(mes: string, n: number): string {
 /** "2026-11" → "noviembre de 2026" */
 export const nombreMes = (mes: string) =>
   new Date(`${mes}-15T12:00:00Z`).toLocaleDateString("es-MX", { timeZone: "UTC", month: "long", year: "numeric" });
+
+/** Hora actual en Mérida, "HH:MM". */
+export function horaAhora(): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false }).format(new Date());
+}

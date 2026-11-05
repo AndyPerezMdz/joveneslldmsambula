@@ -78,6 +78,12 @@
     padding-right: 2.25rem !important;
   }
 
+  /* Que nada dentro de una cuadrícula la haga más ancha que la pantalla
+     (los textos largos se cortan con "…" en vez de empujar todo) */
+  .grid > * {
+    min-width: 0;
+  }
+
   input[type="checkbox"] {
     accent-color: var(--color-marca);
   }

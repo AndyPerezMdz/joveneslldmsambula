@@ -5,7 +5,8 @@ import { Encabezado, Indicador, Tarjeta } from "@/components/Tarjeta";
 import { TarjetaActividad } from "@/components/TarjetaActividad";
 import { pesos } from "@/lib/dinero";
 import { driveListo, espacioDrive, fotosDrive, type Foto } from "@/lib/drive";
-import { fechaLarga, haceCuanto, hoy, semanasEntre, sumarDias } from "@/lib/fechas";
+import { asegurarDias } from "@/lib/calendario";
+import { fechaLarga, haceCuanto, horaAhora, hoy, semanasEntre, sumarDias } from "@/lib/fechas";
 import { asistenciaEntre, lunes } from "@/lib/resumen";
 import { requerirMiembro } from "@/lib/supabase/server";
 import { enEquipo, puedeOrganizar, SEMANAS_ALERTA, type Actividad, type ResumenJoven } from "@/lib/tipos";
@@ -21,15 +22,22 @@ export default async function Inicio() {
   const veLista = enEquipo(perfil, "asistencia");
   const veDinero = enEquipo(perfil, "finanzas");
 
+  await asegurarDias(supabase, h, sumarDias(h, 14));
   const [{ data: acts }, { data: mc }, { data: ficha }] = await Promise.all([
-    supabase.from("actividades").select("id, titulo, tipo, fecha, hora, lugar, notas")
+    supabase.from("actividades").select("id, titulo, tipo, fecha, hora, hora_fin, lugar, notas, horario_id, cancelada").eq("cancelada", false)
       .gte("fecha", h).lte("fecha", sumarDias(h, 45)).order("fecha").order("hora", { nullsFirst: true }),
     supabase.rpc("mis_cooperaciones"),
     supabase.from("jovenes").select("id").eq("perfil_id", perfil.id).maybeSingle(),
   ]);
   const actividades = (acts ?? []) as Actividad[];
   const deHoy = actividades.filter((a) => a.fecha === h);
-  const proximas = actividades.filter((a) => a.fecha > h).slice(0, 5);
+  // La que está pasando (empezó hace menos de 2 h o no ha terminado) o la que sigue
+  const ahora = horaAhora();
+  const aMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const enCurso = deHoy.find((a) => a.hora && aMin(a.hora) <= aMin(ahora) && aMin(ahora) < (a.hora_fin ? aMin(a.hora_fin) : aMin(a.hora) + 60));
+  const siguiente = enCurso ?? deHoy.find((a) => a.hora && aMin(a.hora) > aMin(ahora));
+  // Las fijas (oraciones, dominical…) ya están en la semana: aquí solo las especiales
+  const proximas = actividades.filter((a) => a.fecha > h && !a.horario_id).slice(0, 5);
   const pendientes = ((mc ?? []) as Mia[])
     .filter((c) => !c.excluido && Number(c.aportado) < Number(c.monto))
     .map((c) => ({ ...c, falta: Number(c.monto) - Number(c.aportado) }));
@@ -98,7 +106,7 @@ export default async function Inicio() {
   return (
     <>
       <Encabezado titulo={`Hola, ${perfil.nombre.split(" ")[0]}`} sub={<span className="first-letter:uppercase">{fechaLarga(h)}</span>}>
-        {puedeOrganizar(perfil) && <Link href="/actividades/nueva" className={ui.btnOro}>+ Nueva actividad</Link>}
+        {puedeOrganizar(perfil) && <Link href="/actividades/nueva" className={ui.btnOro}>+ Actividad especial</Link>}
       </Encabezado>
 
       {indicadores.length > 0 && (
@@ -114,18 +122,29 @@ export default async function Inicio() {
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           {deHoy.length > 0 && (
-            <Tarjeta titulo="Hoy" tono="oro">
+            <Tarjeta titulo="Hoy" tono="oro" accion="Semana" href="/actividades">
               <div className="space-y-2">
-                {deHoy.map((a) => (
-                  <TarjetaActividad key={a.id} a={a} extra={veLista ? <span className={`${ui.btn} h-9 shrink-0 px-3 text-xs`}>Pasar lista</span> : null} />
-                ))}
+                {deHoy.map((a) => {
+                  const marca = a.id === enCurso?.id ? "Ahora" : a.id === siguiente?.id ? "Sigue" : null;
+                  const pasada = !marca && a.hora && aMin(a.hora) < aMin(ahora);
+                  return (
+                    <div key={a.id} className={`relative ${pasada ? "opacity-60" : ""}`}>
+                      {marca && (
+                        <span className={`absolute -top-2 left-3 z-10 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${marca === "Ahora" ? "bg-green-700 text-white" : "bg-marca text-white"}`}>
+                          {marca}
+                        </span>
+                      )}
+                      <TarjetaActividad a={a} compacta extra={veLista ? <span className={`${ui.btn} h-9 shrink-0 px-3 text-xs`}>Lista</span> : null} />
+                    </div>
+                  );
+                })}
               </div>
             </Tarjeta>
           )}
 
-          <Tarjeta titulo="Próximas actividades" accion="Ver todas" href="/actividades">
+          <Tarjeta titulo="Próximas actividades especiales" accion="Ver semana" href="/actividades">
             {proximas.length === 0 ? (
-              <p className="py-4 text-center text-sm text-stone-500">No hay actividades en las próximas semanas.</p>
+              <p className="py-4 text-center text-sm text-stone-500">Nada fuera de los horarios fijos en las próximas semanas.</p>
             ) : (
               <div className="space-y-2">{proximas.map((a) => <TarjetaActividad key={a.id} a={a} />)}</div>
             )}

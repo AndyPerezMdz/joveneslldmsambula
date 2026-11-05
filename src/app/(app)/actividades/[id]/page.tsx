@@ -11,7 +11,7 @@ import { enEquipo, puedeOrganizar, SELECT_MOV, tipo, type Actividad, type Movimi
 import { MovimientoFila } from "../../finanzas/MovimientoFila";
 import { ui } from "@/lib/ui";
 import { ActividadCampos } from "../ActividadCampos";
-import { actualizarActividad, agregarYMarcar, borrarActividad } from "../actions";
+import { actualizarActividad, agregarYMarcar, borrarActividad, reactivarActividad } from "../actions";
 import { PaseLista } from "./PaseLista";
 
 export const metadata = { title: "Actividad" };
@@ -22,7 +22,7 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
 
   const { data: a } = await supabase
     .from("actividades")
-    .select("id, titulo, tipo, fecha, hora, lugar, notas")
+    .select("id, titulo, tipo, fecha, hora, hora_fin, lugar, notas, horario_id, cancelada")
     .eq("id", id)
     .maybeSingle<Actividad>();
   if (!a) notFound();
@@ -82,10 +82,21 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
         <h1 className={`${ui.h1} mt-2`}>{a.titulo}</h1>
         <p className="mt-1 text-stone-500 first-letter:uppercase">
           {fechaLarga(a.fecha)}
-          {a.hora && ` · ${horaBonita(a.hora)}`}
+          {a.hora && ` · ${horaBonita(a.hora)}${a.hora_fin ? ` a ${horaBonita(a.hora_fin)}` : ""}`}
           {a.lugar && ` · ${a.lugar}`}
         </p>
         {a.notas && <p className="mt-3 whitespace-pre-line text-sm">{a.notas}</p>}
+        {a.cancelada && (
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            Esta actividad se canceló: no sale en el calendario.
+            {puedeOrganizar(perfil) && (
+              <Formulario action={reactivarActividad}>
+                <input type="hidden" name="id" value={a.id} />
+                <Submit variante="btnSec">Reactivar</Submit>
+              </Formulario>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid items-start gap-5 lg:grid-cols-5">
@@ -150,9 +161,15 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
           </Formulario>
           <Formulario action={borrarActividad} className="mt-4 border-t border-stone-200 pt-4">
             <input type="hidden" name="id" value={a.id} />
-            <Submit variante="btnPeligro" confirmar="¿Borrar esta actividad? También se borra su asistencia. No se puede deshacer.">
-              Borrar actividad
-            </Submit>
+            {a.horario_id ? (
+              <Submit variante="btnPeligro" confirmar="¿Cancelar esta actividad? (Por ejemplo, ese día no hubo oración.) Deja de salir en el calendario; se puede reactivar.">
+                Cancelar esta actividad
+              </Submit>
+            ) : (
+              <Submit variante="btnPeligro" confirmar="¿Borrar esta actividad? También se borra su asistencia. No se puede deshacer.">
+                Borrar actividad
+              </Submit>
+            )}
           </Formulario>
         </details>
       )}

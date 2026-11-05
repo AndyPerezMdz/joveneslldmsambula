@@ -646,3 +646,95 @@ begin
   end if;
   return new;
 end $$;
+
+-- ============================================================
+-- 11. HORARIOS FIJOS → ACTIVIDADES DE CADA DÍA
+--    Cada horario (oración de 5, consagración, dominical…) genera su actividad
+--    del día sola, para que solo se abra y se pase lista.
+--    dias: 1 = lunes … 7 = domingo
+-- ============================================================
+create table if not exists public.horarios (
+  id         uuid primary key default gen_random_uuid(),
+  titulo     text not null check (length(trim(titulo)) > 0),
+  tipo       public.tipo_actividad not null default 'culto',
+  dias       int[] not null check (cardinality(dias) > 0 and dias <@ array[1,2,3,4,5,6,7]),
+  hora       time not null,
+  hora_fin   time,
+  lugar      text,
+  activo     boolean not null default true,
+  orden      int not null default 100,
+  created_at timestamptz not null default now()
+);
+
+alter table public.actividades add column if not exists horario_id uuid references public.horarios (id) on delete set null;
+alter table public.actividades add column if not exists hora_fin   time;
+alter table public.actividades add column if not exists cancelada  boolean not null default false;
+create unique index if not exists actividades_horario_dia on public.actividades (horario_id, fecha) where horario_id is not null;
+
+-- Horarios de la congregación (solo la primera vez; luego se editan en la app)
+insert into public.horarios (titulo, dias, hora, hora_fin, orden)
+select * from (values
+  ('Oración de 5',             array[1,2,3,4,5,6,7], time '05:00', null::time,   1),
+  ('Dominical',                array[7],             time '10:00', time '12:00', 2),
+  ('Servicio de alabanzas',    array[4,7],           time '18:00', time '20:00', 3),
+  ('Oración de 7',             array[1,2,3,5,6],     time '19:00', null::time,   4),
+  ('Consagración apostólica',  array[1,2,3,4,5,6,7], time '20:00', null::time,   5)
+) v(titulo, dias, hora, hora_fin, orden)
+where not exists (select 1 from public.horarios);
+
+alter table public.horarios enable row level security;
+drop policy if exists "horarios_leer"     on public.horarios;
+drop policy if exists "horarios_escribir" on public.horarios;
+create policy "horarios_leer"     on public.horarios for select to authenticated using (public.es_miembro());
+create policy "horarios_escribir" on public.horarios for all    to authenticated
+  using (public.es_encargado()) with check (public.es_encargado());
+grant select, insert, update, delete on public.horarios to authenticated;
+
+-- Crea las actividades de los horarios entre dos fechas (no duplica; máximo 62 días).
+-- Cualquiera con cuenta la puede llamar: solo agrega lo que falta.
+create or replace function public.generar_actividades(p_desde date, p_hasta date)
+returns int language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  if not public.es_miembro() then return 0; end if;
+  if p_hasta < p_desde or p_hasta - p_desde > 62 then raise exception 'Rango inválido.'; end if;
+  insert into public.actividades (titulo, tipo, fecha, hora, hora_fin, lugar, horario_id, creado_por)
+  select h.titulo, h.tipo, d::date, h.hora, h.hora_fin, h.lugar, h.id, null
+    from public.horarios h
+    cross join generate_series(p_desde, p_hasta, interval '1 day') d
+   where h.activo and extract(isodow from d)::int = any (h.dias)
+  on conflict (horario_id, fecha) where horario_id is not null do nothing;
+  get diagnostics n = row_count;
+  return n;
+end $$;
+grant execute on function public.generar_actividades(date, date) to authenticated;
+
+-- Al cambiar un horario, las actividades que vienen (sin asistencia todavía) se ajustan
+create or replace function public.ajustar_horario()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update public.actividades a
+     set titulo = new.titulo, tipo = new.tipo, hora = new.hora, hora_fin = new.hora_fin, lugar = new.lugar,
+         cancelada = case when not new.activo or not (extract(isodow from a.fecha)::int = any (new.dias)) then true else a.cancelada end
+   where a.horario_id = new.id and a.fecha > public.hoy()
+     and not exists (select 1 from public.asistencias s where s.actividad_id = a.id);
+  return new;
+end $$;
+drop trigger if exists horarios_ajustar on public.horarios;
+create trigger horarios_ajustar after update on public.horarios
+  for each row execute function public.ajustar_horario();
+
+-- La asistencia de actividades canceladas no cuenta
+create or replace function public.resumen_jovenes(p_semanas int default 8)
+returns table (joven_id uuid, nombre text, activo boolean, recientes int, total int, ultima date)
+language sql stable security invoker set search_path = public as $$
+  select j.id, j.nombre, j.activo,
+         count(act.id) filter (where act.fecha >= public.hoy() - p_semanas * 7)::int,
+         count(act.id)::int,
+         max(act.fecha)
+    from public.jovenes j
+    left join public.asistencias a on a.joven_id = j.id
+    left join public.actividades act on act.id = a.actividad_id and act.fecha <= public.hoy() and not act.cancelada
+   where not exists (select 1 from public.perfiles p where p.id = j.perfil_id and p.rol = 'admin')
+   group by j.id, j.nombre, j.activo
+$$;

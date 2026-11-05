@@ -34,7 +34,7 @@ export default async function Evidencias() {
     error = e instanceof Error ? e.message : "No se pudo leer el Drive.";
   }
 
-  const { data } = await supabase.from("actividades").select("id, titulo, tipo, fecha, hora, lugar, notas").order("fecha", { ascending: false });
+  const { data } = await supabase.from("actividades").select("id, titulo, tipo, fecha, hora, hora_fin, lugar, notas, horario_id, cancelada").eq("cancelada", false).order("fecha", { ascending: false });
   const actividades = (data ?? []) as Actividad[];
   const { album, sueltas } = repartir(fotos, actividades);
   const conFotos = actividades.filter((a) => album.has(a.id));

@@ -10,9 +10,20 @@ export type Actividad = {
   tipo: TipoActividad;
   fecha: string;
   hora: string | null;
+  hora_fin?: string | null;
   lugar: string | null;
   notas: string | null;
+  horario_id?: string | null;
+  cancelada?: boolean;
 };
+export const SELECT_ACT = "id, titulo, tipo, fecha, hora, hora_fin, lugar, notas, horario_id, cancelada";
+
+/** Horario fijo (oración de 5, dominical…). dias: 1 = lunes … 7 = domingo */
+export type Horario = {
+  id: string; titulo: string; tipo: TipoActividad; dias: number[];
+  hora: string; hora_fin: string | null; lugar: string | null; activo: boolean;
+};
+export const DIAS_CORTOS = ["", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 
 /** Fila de resumen_jovenes() */
 export type ResumenJoven = {
