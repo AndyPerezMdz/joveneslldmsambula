@@ -10,7 +10,14 @@ export const metadata: Metadata = {
   applicationName: "Jóvenes",
   // iPhone: que abra a pantalla completa al instalarla desde Safari
   appleWebApp: { capable: true, title: "Jóvenes", statusBarStyle: "black-translucent" },
-  icons: { apple: "/iconos/apple-touch-icon.png" },
+  // Pestaña del navegador + iPhone (si se define a mano, hay que poner todos)
+  icons: {
+    icon: [
+      { url: "/favicon.ico", sizes: "48x48" },
+      { url: "/iconos/icono-192.png", type: "image/png", sizes: "192x192" },
+    ],
+    apple: "/iconos/apple-touch-icon.png",
+  },
   formatDetection: { telephone: false },
 };
 
