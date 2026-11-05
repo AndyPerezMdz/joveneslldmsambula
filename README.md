@@ -9,7 +9,7 @@ papel, la libreta del dinero y las fotos regadas en WhatsApp.
 ## Fases
 
 - [x] **1. Actividades y asistencia**: calendario, lista de jóvenes, pase de lista discreto y "hay que buscarlos".
-- [ ] **2. Finanzas**: entradas, salidas, cooperaciones, ventas y reportes. Nada se borra, solo se anula.
+- [x] **2. Finanzas**: entradas, salidas, cooperaciones, ventas y reportes. Nada se borra, solo se anula.
 - [ ] **3. Evidencias y panel**: fotos en Google Drive ordenadas por actividad y fecha; resumen para encargados.
 
 ## Cómo funciona
@@ -20,6 +20,8 @@ papel, la libreta del dinero y las fotos regadas en WhatsApp.
 | Joven del grupo | `jovenes` | Ana López (puede no tener cuenta) |
 | Actividad | `actividades` | Culto juvenil · sáb 8 nov · 7:30 p. m. |
 | Asistencia | `asistencias` | Ana vino al culto del 8 nov |
+| Dinero | `movimientos` | Salida · Compra · Masa y hojas · $780 · Venta de tamales |
+| Cooperación | `cooperaciones` (+ `cooperacion_excluidos`) | Retiro · $100 por persona |
 
 `resumen_jovenes(semanas)` regresa, por joven, cuántas veces vino en las últimas N semanas,
 cuántas en total y la fecha de la última. Con eso se ordena el pase de lista (los que vienen
@@ -35,6 +37,16 @@ seguido arriba) y se arma la alerta de quién lleva 3 semanas o más sin venir.
 
 Equipos (`perfiles.equipos`, puede tener varios): `asistencia` (pasa lista, mantiene la lista de jóvenes),
 `finanzas`, `evidencias`. Cualquiera que esté en un equipo puede crear actividades.
+
+## Finanzas
+
+- Cada entrada o salida es un renglón en `movimientos`, opcionalmente ligado a una actividad
+  (así cada venta muestra cuánto se invirtió, cuánto entró y cuánto se ganó).
+- **Nada se borra ni se edita.** Un trigger (`proteger_movimientos`) solo deja **anular**, una vez,
+  con motivo; queda guardado quién y cuándo. Lo anulado sale tachado y no cuenta en el saldo.
+- Una **cooperación** fija cuánto da cada joven activo. Cada pago es una entrada con `cooperacion_id`
+  y `joven_id`; a quien no le toca se le marca "No aplica". Cada joven ve en su inicio lo que le falta.
+- `saldo()`, `estado_cooperacion(id)` y `mis_cooperaciones()` hacen las cuentas en la base.
 
 ## Pase de lista
 

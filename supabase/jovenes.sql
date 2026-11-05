@@ -279,3 +279,153 @@ select u.id,
 
 update public.perfiles set rol = 'admin'
  where email in (select email from public.correos_admin) and rol <> 'admin';
+
+-- ============================================================
+-- 7. FINANZAS (fase 2)
+--    Regla de oro: los movimientos NO se borran ni se editan.
+--    Si algo está mal, se anula con un motivo y se registra bien.
+-- ============================================================
+do $$ begin create type public.tipo_mov as enum ('entrada', 'salida'); exception when duplicate_object then null; end $$;
+do $$ begin create type public.categoria_mov as enum
+  ('venta', 'cooperacion', 'donacion', 'ofrenda', 'compra', 'comida', 'transporte', 'material', 'otro');
+  exception when duplicate_object then null; end $$;
+
+-- ---------- Cooperaciones ("todos ponen $100 para el retiro") ----------
+create table if not exists public.cooperaciones (
+  id            uuid primary key default gen_random_uuid(),
+  concepto      text not null check (length(trim(concepto)) > 0),
+  monto         numeric(12,2) not null check (monto > 0),   -- por persona
+  fecha_limite  date,
+  actividad_id  uuid references public.actividades (id) on delete set null,
+  cerrada       boolean not null default false,
+  creado_por    uuid references public.perfiles (id) on delete set null default auth.uid(),
+  created_at    timestamptz not null default now()
+);
+
+-- A quién no le toca (no va al retiro, está exento, etc.)
+create table if not exists public.cooperacion_excluidos (
+  cooperacion_id uuid not null references public.cooperaciones (id) on delete cascade,
+  joven_id       uuid not null references public.jovenes (id) on delete cascade,
+  primary key (cooperacion_id, joven_id)
+);
+
+-- ---------- Movimientos de dinero ----------
+create table if not exists public.movimientos (
+  id              uuid primary key default gen_random_uuid(),
+  tipo            public.tipo_mov not null,
+  categoria       public.categoria_mov not null default 'otro',
+  concepto        text not null check (length(trim(concepto)) > 0),
+  monto           numeric(12,2) not null check (monto > 0),
+  fecha           date not null default public.hoy(),
+  actividad_id    uuid references public.actividades (id) on delete set null,
+  cooperacion_id  uuid references public.cooperaciones (id) on delete restrict,
+  joven_id        uuid references public.jovenes (id) on delete restrict,   -- quién pagó (cooperaciones)
+  registrado_por  uuid references public.perfiles (id) on delete set null default auth.uid(),
+  created_at      timestamptz not null default now(),
+  anulado         boolean not null default false,
+  anulado_motivo  text,
+  anulado_por     uuid references public.perfiles (id) on delete set null,
+  anulado_at      timestamptz,
+  constraint mov_cooperacion_con_joven check (cooperacion_id is null or (tipo = 'entrada' and joven_id is not null)),
+  constraint mov_anulado_con_motivo  check (not anulado or length(trim(coalesce(anulado_motivo, ''))) > 2)
+);
+create index if not exists movimientos_fecha       on public.movimientos (fecha);
+create index if not exists movimientos_actividad   on public.movimientos (actividad_id);
+create index if not exists movimientos_cooperacion on public.movimientos (cooperacion_id);
+
+-- Candado: solo se puede ANULAR (una vez). Nada de editar ni borrar.
+create or replace function public.proteger_movimientos()
+returns trigger language plpgsql as $$
+begin
+  if tg_op = 'DELETE' then
+    raise exception 'Los movimientos no se borran: anúlalo con un motivo.';
+  end if;
+  if old.anulado then
+    raise exception 'Ese movimiento ya está anulado.';
+  end if;
+  if (new.tipo, new.categoria, new.concepto, new.monto, new.fecha, new.actividad_id,
+      new.cooperacion_id, new.joven_id, new.registrado_por, new.created_at)
+     is distinct from
+     (old.tipo, old.categoria, old.concepto, old.monto, old.fecha, old.actividad_id,
+      old.cooperacion_id, old.joven_id, old.registrado_por, old.created_at) then
+    raise exception 'Los movimientos no se editan: anúlalo y regístralo de nuevo.';
+  end if;
+  if new.anulado then
+    new.anulado_por := auth.uid();
+    new.anulado_at  := now();
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists movimientos_candado on public.movimientos;
+create trigger movimientos_candado
+  before update or delete on public.movimientos
+  for each row execute function public.proteger_movimientos();
+
+-- ---------- RLS ----------
+alter table public.cooperaciones         enable row level security;
+alter table public.cooperacion_excluidos enable row level security;
+alter table public.movimientos           enable row level security;
+
+-- Cooperaciones: todos las ven (para saber cuánto deben); finanzas las maneja.
+drop policy if exists "cooperaciones_leer"     on public.cooperaciones;
+drop policy if exists "cooperaciones_escribir" on public.cooperaciones;
+create policy "cooperaciones_leer"     on public.cooperaciones for select to authenticated using (public.es_miembro());
+create policy "cooperaciones_escribir" on public.cooperaciones for all    to authenticated
+  using (public.en_equipo('finanzas')) with check (public.en_equipo('finanzas'));
+
+drop policy if exists "excluidos_leer"     on public.cooperacion_excluidos;
+drop policy if exists "excluidos_escribir" on public.cooperacion_excluidos;
+create policy "excluidos_leer"     on public.cooperacion_excluidos for select to authenticated using (public.es_miembro());
+create policy "excluidos_escribir" on public.cooperacion_excluidos for all    to authenticated
+  using (public.en_equipo('finanzas')) with check (public.en_equipo('finanzas'));
+
+-- Movimientos: finanzas ve todo; cada joven ve solo lo que él pagó. Sin política de borrar.
+drop policy if exists "movimientos_leer"     on public.movimientos;
+drop policy if exists "movimientos_insertar" on public.movimientos;
+drop policy if exists "movimientos_anular"   on public.movimientos;
+create policy "movimientos_leer"     on public.movimientos for select to authenticated
+  using (public.en_equipo('finanzas') or (joven_id is not null and joven_id = public.mi_joven_id()));
+create policy "movimientos_insertar" on public.movimientos for insert to authenticated
+  with check (public.en_equipo('finanzas'));
+create policy "movimientos_anular"   on public.movimientos for update to authenticated
+  using (public.en_equipo('finanzas')) with check (public.en_equipo('finanzas'));
+
+grant select, insert, update, delete on public.cooperaciones, public.cooperacion_excluidos to authenticated;
+grant select, insert, update on public.movimientos to authenticated;
+
+-- ---------- Consultas ----------
+-- Saldo actual (sin anulados)
+create or replace function public.saldo()
+returns numeric language sql stable security invoker set search_path = public as $$
+  select coalesce(sum(case when tipo = 'entrada' then monto else -monto end), 0)
+    from public.movimientos where not anulado
+$$;
+
+-- Estado de una cooperación por joven: cuánto ha dado y si le toca
+create or replace function public.estado_cooperacion(p_id uuid)
+returns table (joven_id uuid, nombre text, aportado numeric, excluido boolean)
+language sql stable security invoker set search_path = public as $$
+  select j.id, j.nombre,
+         coalesce(sum(m.monto) filter (where not m.anulado), 0),
+         exists (select 1 from public.cooperacion_excluidos x where x.cooperacion_id = p_id and x.joven_id = j.id)
+    from public.jovenes j
+    left join public.movimientos m on m.joven_id = j.id and m.cooperacion_id = p_id
+   where j.activo or m.id is not null
+   group by j.id, j.nombre
+$$;
+
+-- Lo que me toca dar a mí (para la pantalla de inicio del joven)
+create or replace function public.mis_cooperaciones()
+returns table (id uuid, concepto text, monto numeric, fecha_limite date, aportado numeric, excluido boolean)
+language sql stable security invoker set search_path = public as $$
+  select c.id, c.concepto, c.monto, c.fecha_limite,
+         coalesce(sum(m.monto) filter (where not m.anulado), 0),
+         exists (select 1 from public.cooperacion_excluidos x where x.cooperacion_id = c.id and x.joven_id = public.mi_joven_id())
+    from public.cooperaciones c
+    left join public.movimientos m on m.cooperacion_id = c.id and m.joven_id = public.mi_joven_id()
+   where not c.cerrada and public.mi_joven_id() is not null
+   group by c.id
+$$;
+
+grant execute on function public.saldo(), public.estado_cooperacion(uuid), public.mis_cooperaciones() to authenticated;

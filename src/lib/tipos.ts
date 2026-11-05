@@ -55,3 +55,47 @@ export const esEncargado = (p: P) => p?.rol === "admin" || p?.rol === "encargado
 export const enEquipo = (p: P, e: Equipo) => !!p && (esEncargado(p) || p.equipos.includes(e));
 /** Cualquiera de un equipo puede crear actividades. */
 export const puedeOrganizar = (p: P) => !!p && (esEncargado(p) || p.equipos.length > 0);
+
+// ---------- Finanzas ----------
+export type TipoMov = "entrada" | "salida";
+export type CategoriaMov =
+  | "venta" | "cooperacion" | "donacion" | "ofrenda"
+  | "compra" | "comida" | "transporte" | "material" | "otro";
+
+export const CATEGORIAS: { v: CategoriaMov; n: string; para: TipoMov | "ambos" }[] = [
+  { v: "venta", n: "Venta", para: "entrada" },
+  { v: "cooperacion", n: "Cooperación", para: "entrada" },
+  { v: "donacion", n: "Donación", para: "entrada" },
+  { v: "ofrenda", n: "Ofrenda", para: "entrada" },
+  { v: "compra", n: "Compra", para: "salida" },
+  { v: "comida", n: "Comida", para: "salida" },
+  { v: "transporte", n: "Transporte", para: "salida" },
+  { v: "material", n: "Material", para: "salida" },
+  { v: "otro", n: "Otro", para: "ambos" },
+];
+export const categoria = (v: CategoriaMov) => CATEGORIAS.find((c) => c.v === v)?.n ?? "Otro";
+
+export type Movimiento = {
+  id: string;
+  tipo: TipoMov;
+  categoria: CategoriaMov;
+  concepto: string;
+  monto: number;
+  fecha: string;
+  actividad_id: string | null;
+  cooperacion_id: string | null;
+  joven_id: string | null;
+  anulado: boolean;
+  anulado_motivo: string | null;
+};
+export const SELECT_MOV =
+  "id, tipo, categoria, concepto, monto, fecha, actividad_id, cooperacion_id, joven_id, anulado, anulado_motivo";
+
+export type Cooperacion = {
+  id: string;
+  concepto: string;
+  monto: number;
+  fecha_limite: string | null;
+  actividad_id: string | null;
+  cerrada: boolean;
+};

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { TarjetaActividad } from "@/components/TarjetaActividad";
-import { haceCuanto, hoy, semanasEntre, sumarDias } from "@/lib/fechas";
+import { pesos } from "@/lib/dinero";
+import { fechaLarga, haceCuanto, hoy, semanasEntre, sumarDias } from "@/lib/fechas";
 import { requerirMiembro } from "@/lib/supabase/server";
 import { ui } from "@/lib/ui";
 import { enEquipo, puedeOrganizar, SEMANAS_ALERTA, type Actividad, type ResumenJoven } from "@/lib/tipos";
@@ -46,6 +47,13 @@ export default async function Inicio() {
     }
   }
 
+  // Lo que le toca cooperar a quien está viendo (si su cuenta está ligada a su ficha)
+  type Mia = { id: string; concepto: string; monto: number; fecha_limite: string | null; aportado: number; excluido: boolean };
+  const { data: mc } = await supabase.rpc("mis_cooperaciones");
+  const pendientes = ((mc ?? []) as Mia[])
+    .filter((c) => !c.excluido && Number(c.aportado) < Number(c.monto))
+    .map((c) => ({ ...c, falta: Number(c.monto) - Number(c.aportado) }));
+
   const cuantos = (a: Fila) =>
     veLista ? (
       <span className="shrink-0 text-right leading-tight">
@@ -73,6 +81,23 @@ export default async function Inicio() {
             actividades a las que viniste en las últimas 8 semanas ({mia.total} en total).
           </p>
         </div>
+      )}
+
+      {pendientes.length > 0 && (
+        <section className="rounded-3xl border border-oro/50 bg-oro-suave p-5">
+          <h2 className="font-semibold text-titulo">Te falta cooperar</h2>
+          <ul className="mt-2 divide-y divide-oro/30">
+            {pendientes.map((c) => (
+              <li key={c.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                <span>
+                  <span className="font-medium">{c.concepto}</span>
+                  {c.fecha_limite && <span className="block text-xs text-stone-500">Hasta el {fechaLarga(c.fecha_limite)}</span>}
+                </span>
+                <span className="font-semibold tabular-nums text-titulo">{pesos(c.falta)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {deHoy.length > 0 && (

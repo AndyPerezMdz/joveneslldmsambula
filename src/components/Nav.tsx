@@ -10,6 +10,7 @@ export function Nav({ perfil }: { perfil: Perfil }) {
   const links = [
     { href: "/", n: "Actividades" },
     ...(enEquipo(perfil, "asistencia") ? [{ href: "/jovenes", n: "Jóvenes" }] : []),
+    ...(enEquipo(perfil, "finanzas") ? [{ href: "/finanzas", n: "Finanzas" }] : []),
     ...(esAdmin(perfil) ? [{ href: "/equipo", n: "Equipo" }] : []),
   ];
   const inicial = perfil.nombre.trim().charAt(0).toUpperCase() || "?";
