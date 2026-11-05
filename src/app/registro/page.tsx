@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { AuthShell } from "@/components/AuthShell";
+import { BotonesOAuth } from "@/components/BotonesOAuth";
 import { RegistroForm } from "./RegistroForm";
 
 export const dynamic = "force-dynamic";
@@ -8,6 +9,7 @@ export const metadata = { title: "Crear cuenta" };
 export default function Registro() {
   return (
     <AuthShell titulo="Crear cuenta" subtitulo="Para entrar a la app del grupo de jóvenes">
+      <BotonesOAuth />
       <RegistroForm />
       <p className="mt-5 text-center text-sm text-stone-500">
         ¿Ya tienes cuenta?{" "}

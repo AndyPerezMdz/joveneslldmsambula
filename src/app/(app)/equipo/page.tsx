@@ -37,8 +37,11 @@ export default async function Equipo() {
               <Formulario action={actualizarCuenta} className={`${ui.card} space-y-4 p-5`}>
                 <input type="hidden" name="id" value={c.id} />
                 <div>
-                  <p className="font-semibold text-titulo">{c.nombre}{c.id === yo.id && <span className="ml-2 text-xs font-normal text-stone-400">(tú)</span>}</p>
-                  <p className="text-sm text-stone-500">{c.email}</p>
+                  <label className={ui.label}>
+                    Nombre{c.id === yo.id && <span className="ml-2 text-xs font-normal text-stone-400">(tú)</span>}
+                    <input name="nombre" required defaultValue={c.nombre} className={ui.input} />
+                  </label>
+                  <p className="mt-1 text-xs text-stone-500">{c.email}</p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className={ui.label}>

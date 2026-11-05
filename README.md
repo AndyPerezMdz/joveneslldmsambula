@@ -48,8 +48,9 @@ desde la misma pantalla y queda marcado.
 2. **Auth → URL Configuration:** Site URL = tu dominio (o `http://localhost:3000`).
 3. **Auth → Email Templates → Confirm signup:** el link debe ser
    `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email`
-4. Regístrate en `/registro`. Si tu correo está en `correos_admin`, ya entras como admin.
-5. Local:
+4. **Google y Apple** (ver abajo). Si no los configuras, los botones dan error pero el correo sigue funcionando.
+5. Regístrate en `/registro`. Si tu correo está en `correos_admin`, ya entras como admin.
+6. Local:
    ```powershell
    Copy-Item .env.example .env.local   # pon URL y publishable key
    npm install
@@ -60,3 +61,18 @@ desde la misma pantalla y queda marcado.
 
 Todo vive en **`supabase/jovenes.sql`**. Cuando algo cambie, se edita ese archivo y se vuelve a
 correr completo en el SQL Editor.
+
+## Entrar con Google y Apple
+
+En **Supabase → Auth → URL Configuration → Redirect URLs** agrega:
+`https://TU-DOMINIO/auth/callback` y `http://localhost:3000/auth/callback`.
+
+**Google:** Google Cloud Console → APIs y servicios → Credenciales → Crear ID de cliente OAuth
+(Aplicación web). En *URI de redireccionamiento autorizados* pon el callback de Supabase
+(`https://<proyecto>.supabase.co/auth/v1/callback`). Pega Client ID y Secret en
+Supabase → Auth → Sign In / Providers → Google.
+
+**Apple:** necesita cuenta de Apple Developer (de paga). Crea un Services ID con
+"Sign in with Apple", pon el mismo callback de Supabase como Return URL, genera la
+llave (.p8) y pega todo en Supabase → Auth → Sign In / Providers → Apple.
+Apple a veces no manda el nombre: se corrige en **Equipo**.

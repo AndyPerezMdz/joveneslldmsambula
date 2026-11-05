@@ -11,11 +11,14 @@ export async function actualizarCuenta(_p: Resultado, fd: FormData): Promise<Res
     const rol = txt(fd, "rol") as RolApp;
     const equipos = fd.getAll("equipos").map(String).filter((e): e is Equipo => EQUIPOS.some((x) => x.v === e));
     const joven = txt(fd, "joven_id");
+    // Apple a veces no manda el nombre: aquí se corrige
+    const nombre = txt(fd, "nombre").replace(/\s+/g, " ");
+    if (nombre.length < 2) throw new Error("Escribe el nombre.");
 
     if (!ROLES.some((r) => r.v === rol)) throw new Error("Rol inválido.");
     if (id === perfil.id && rol !== "admin") throw new Error("No te puedes quitar el admin a ti mismo.");
 
-    ok((await supabase.from("perfiles").update({ rol, equipos }).eq("id", id)).error);
+    ok((await supabase.from("perfiles").update({ nombre, rol, equipos }).eq("id", id)).error);
 
     // Ligar la cuenta con su ficha de joven (o desligar)
     ok((await supabase.from("jovenes").update({ perfil_id: null }).eq("perfil_id", id)).error);

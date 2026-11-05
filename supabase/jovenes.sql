@@ -211,7 +211,12 @@ $$;
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare
-  v_nombre text := coalesce(nullif(trim(new.raw_user_meta_data ->> 'nombre'), ''), split_part(new.email, '@', 1));
+  -- Correo/contraseña manda "nombre"; Google manda "full_name"/"name"; Apple a veces nada
+  v_nombre text := coalesce(
+    nullif(trim(new.raw_user_meta_data ->> 'nombre'), ''),
+    nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
+    nullif(trim(new.raw_user_meta_data ->> 'name'), ''),
+    split_part(new.email, '@', 1));
   v_joven  uuid;
 begin
   insert into public.perfiles (id, nombre, email, rol)
@@ -264,7 +269,10 @@ create trigger jovenes_ligar_correo
 -- Cuentas que ya existían antes de correr este archivo
 insert into public.perfiles (id, nombre, email, rol)
 select u.id,
-       coalesce(nullif(trim(u.raw_user_meta_data ->> 'nombre'), ''), split_part(u.email, '@', 1)),
+       coalesce(nullif(trim(u.raw_user_meta_data ->> 'nombre'), ''),
+                nullif(trim(u.raw_user_meta_data ->> 'full_name'), ''),
+                nullif(trim(u.raw_user_meta_data ->> 'name'), ''),
+                split_part(u.email, '@', 1)),
        lower(u.email), 'joven'
   from auth.users u
  where not exists (select 1 from public.perfiles p where p.id = u.id);
