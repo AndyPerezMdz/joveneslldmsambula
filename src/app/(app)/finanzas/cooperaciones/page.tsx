@@ -29,7 +29,8 @@ export default async function Cooperaciones() {
       <Link href="/finanzas" className="text-sm text-stone-500 hover:text-titulo">← Finanzas</Link>
       <h1 className={ui.h1}>Cooperaciones</h1>
 
-      <ul className="space-y-2">
+      <div className="grid gap-5 lg:grid-cols-3">
+      <ul className="space-y-2 lg:col-span-2">
         {lista.map((x) => (
           <li key={x.id}>
             <Link href={`/finanzas/cooperaciones/${x.id}`}
@@ -55,14 +56,14 @@ export default async function Cooperaciones() {
         )}
       </ul>
 
-      <Formulario action={crearCooperacion} className={`${ui.card} space-y-4`}>
+      <Formulario action={crearCooperacion} className={`${ui.card} space-y-4 self-start`}>
         <h2 className={ui.h2}>Nueva cooperación</h2>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className={`${ui.label} sm:col-span-2`}>¿Para qué?<input name="concepto" required placeholder="Retiro de diciembre" className={ui.input} /></label>
+        <div className="grid gap-4">
+          <label className={ui.label}>¿Para qué?<input name="concepto" required placeholder="Retiro de diciembre" className={ui.input} /></label>
           <label className={ui.label}>Cuánto da cada quien<input name="monto" inputMode="decimal" required placeholder="$100" className={ui.input} /></label>
           <label className={ui.label}>Fecha límite <span className="font-normal text-stone-400">(opcional)</span>
             <input name="fecha_limite" type="date" className={ui.input} /></label>
-          <label className={`${ui.label} sm:col-span-2`}>Actividad <span className="font-normal text-stone-400">(opcional)</span>
+          <label className={ui.label}>Actividad <span className="font-normal text-stone-400">(opcional)</span>
             <select name="actividad_id" defaultValue="" className={ui.input}>
               <option value="">— Ninguna —</option>
               {(acts ?? []).map((a: { id: string; titulo: string; fecha: string }) => (
@@ -74,6 +75,7 @@ export default async function Cooperaciones() {
         <p className="text-xs text-stone-500">Les toca a todos los jóvenes activos. A quien no le toque, se le marca “No aplica” adentro.</p>
         <div className="flex justify-end"><Submit>Crear</Submit></div>
       </Formulario>
+      </div>
     </div>
   );
 }

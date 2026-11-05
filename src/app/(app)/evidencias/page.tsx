@@ -80,6 +80,7 @@ export default async function Evidencias() {
         </p>
       )}
 
+      <div className="grid gap-x-6 gap-y-8 lg:grid-cols-2">
       {conFotos.map((a) => {
         const f = partesFecha(a.fecha);
         const fs = album.get(a.id)!;
@@ -96,6 +97,7 @@ export default async function Evidencias() {
           </section>
         );
       })}
+      </div>
 
       {dias.length > 0 && (
         <section className="space-y-5">

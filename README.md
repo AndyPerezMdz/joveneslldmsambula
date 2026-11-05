@@ -63,10 +63,35 @@ El equipo de evidencias las sube con la app de Drive, como siempre, y la app:
 
 Los tickets de finanzas se suben desde la app (ya achicados en el celular) a `Evidencias/Tickets`.
 
-## Panel (`/panel`, encargados)
+## Inicio (dashboard)
 
-Promedio por culto, jóvenes activos, saldo, fotos del mes, gráfica de jóvenes por semana
-(8 semanas), a quién hay que buscar, cooperaciones abiertas y aviso del espacio del Drive.
+Cada quien ve lo que le toca: actividades de hoy y próximas, promedio por culto, jóvenes activos,
+saldo, fotos del mes, gráfica de jóvenes por semana, a quién hay que buscar, lo que le falta
+cooperar y el aviso del espacio del Drive. En computadora el menú va a la izquierda; en el
+celular, abajo.
+
+## Reportes (`/reportes`)
+
+Resumen de un mes: actividades con asistencia y fotos, los más constantes, a quién buscar,
+saldo al iniciar y al cerrar, entradas y salidas por categoría, detalle de movimientos y
+cooperaciones. "Descargar PDF" abre la impresión del navegador → *Guardar como PDF*.
+
+## Importar jóvenes (`/jovenes/importar`)
+
+Se pega la lista desde Excel/Sheets (o un .csv). Junta nombre y apellidos si vienen en columnas
+separadas, detecta correo y teléfono, corrige MAYÚSCULAS y no duplica a quien ya está.
+
+## Categorías
+
+Ya no son fijas: viven en la tabla `categorias`. Se crean desde Finanzas → Categorías o al
+registrar un movimiento ("+ Otra categoría…"). Las que no se usan se desactivan.
+
+## App instalable (PWA)
+
+`src/app/manifest.ts`, íconos en `public/iconos/` y `public/sw.js`. En Android sale el botón
+"Instalar"; en iPhone se explica *Compartir → Agregar a inicio* (solo desde Safari). Las páginas
+que ya se abrieron funcionan sin internet (el pase de lista guarda y manda después). Al salir de
+la cuenta se borra lo guardado en el celular.
 
 ## Pase de lista
 

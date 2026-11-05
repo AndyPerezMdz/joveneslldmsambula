@@ -44,8 +44,8 @@ export async function borrarActividad(_p: Resultado, fd: FormData): Promise<Resu
     ok(error);
   });
   if (!r?.ok) return r;
-  revalidatePath("/");
-  redirect("/");
+  revalidatePath("/", "layout");
+  redirect("/actividades");
 }
 
 /** Llegó alguien que no está en la lista: se da de alta y se marca presente. */

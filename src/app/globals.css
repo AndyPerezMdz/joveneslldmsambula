@@ -136,4 +136,8 @@
 @media print {
   .no-print { display: none !important; }
   body { background: white; }
+  /* El reporte en papel: sin menú lateral, a todo lo ancho */
+  .lg\:pl-64 { padding-left: 0 !important; }
+  main { padding: 0 !important; max-width: none !important; }
+  @page { margin: 14mm; }
 }

@@ -173,13 +173,13 @@ export function PaseLista({ actividadId, jovenes, presentesIniciales, hoy }: {
       {seguido.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">Vienen seguido</h3>
-          <ul className="space-y-2">{seguido.map(fila)}</ul>
+          <ul className="grid gap-2 sm:grid-cols-2">{seguido.map(fila)}</ul>
         </div>
       )}
       {poco.length > 0 && (
         <div className="space-y-2">
           <h3 className="text-[11px] font-bold uppercase tracking-[0.18em] text-stone-500">Últimamente no han venido</h3>
-          <ul className="space-y-2">{poco.map(fila)}</ul>
+          <ul className="grid gap-2 sm:grid-cols-2">{poco.map(fila)}</ul>
         </div>
       )}
       {q && visibles.length === 0 && (

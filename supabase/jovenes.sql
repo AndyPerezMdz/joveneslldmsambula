@@ -436,3 +436,50 @@ grant execute on function public.saldo(), public.estado_cooperacion(uuid), publi
 --    La app las lee y las acomoda por fecha. Aquí solo va el ticket de cada gasto.
 -- ============================================================
 alter table public.movimientos add column if not exists comprobante text;   -- id del archivo en Drive (Evidencias/Tickets)
+
+-- ============================================================
+-- 9. CATEGORÍAS EDITABLES
+--    Antes eran una lista fija (enum). Ahora finanzas puede crear las suyas.
+--    movimientos.categoria guarda la clave ('comida', 'renta-de-sillas', …).
+-- ============================================================
+create table if not exists public.categorias (
+  id      text primary key check (id ~ '^[a-z0-9-]+$'),
+  nombre  text not null check (length(trim(nombre)) > 0),
+  tipo    text not null default 'ambos' check (tipo in ('entrada', 'salida', 'ambos')),
+  activa  boolean not null default true,
+  orden   int not null default 100
+);
+create unique index if not exists categorias_nombre_unico on public.categorias (lower(trim(nombre)));
+
+insert into public.categorias (id, nombre, tipo, orden) values
+  ('venta', 'Venta', 'entrada', 1), ('cooperacion', 'Cooperación', 'entrada', 2),
+  ('donacion', 'Donación', 'entrada', 3), ('ofrenda', 'Ofrenda', 'entrada', 4),
+  ('compra', 'Compra', 'salida', 10), ('comida', 'Comida', 'salida', 11),
+  ('transporte', 'Transporte', 'salida', 12), ('material', 'Material', 'salida', 13),
+  ('otro', 'Otro', 'ambos', 99)
+on conflict (id) do nothing;
+
+-- Pasar la columna de enum a texto ligado a la tabla (solo la primera vez)
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'movimientos'
+                and column_name = 'categoria' and udt_name = 'categoria_mov') then
+    alter table public.movimientos alter column categoria drop default;
+    alter table public.movimientos alter column categoria type text using categoria::text;
+    alter table public.movimientos alter column categoria set default 'otro';
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'movimientos_categoria_fk') then
+    alter table public.movimientos
+      add constraint movimientos_categoria_fk foreign key (categoria)
+      references public.categorias (id) on update cascade on delete restrict;
+  end if;
+end $$;
+
+alter table public.categorias enable row level security;
+drop policy if exists "categorias_leer"     on public.categorias;
+drop policy if exists "categorias_escribir" on public.categorias;
+create policy "categorias_leer"     on public.categorias for select to authenticated using (public.es_miembro());
+create policy "categorias_escribir" on public.categorias for all    to authenticated
+  using (public.en_equipo('finanzas')) with check (public.en_equipo('finanzas'));
+grant select, insert, update, delete on public.categorias to authenticated;

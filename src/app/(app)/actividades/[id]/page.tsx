@@ -58,9 +58,14 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
   // Dinero de esta actividad (equipo de finanzas)
   const veDinero = enEquipo(perfil, "finanzas");
   let movs: Movimiento[] = [];
+  const catNombre = new Map<string, string>();
   if (veDinero) {
-    const { data } = await supabase.from("movimientos").select(SELECT_MOV).eq("actividad_id", a.id).order("created_at");
+    const [{ data }, { data: cs }] = await Promise.all([
+      supabase.from("movimientos").select(SELECT_MOV).eq("actividad_id", a.id).order("created_at"),
+      supabase.from("categorias").select("id, nombre"),
+    ]);
     movs = (data ?? []) as Movimiento[];
+    for (const c of (cs ?? []) as { id: string; nombre: string }[]) catNombre.set(c.id, c.nombre);
   }
   const validos = movs.filter((m) => !m.anulado);
   const entro = validos.filter((m) => m.tipo === "entrada").reduce((s, m) => s + Number(m.monto), 0);
@@ -68,7 +73,7 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
 
   return (
     <div className="space-y-6">
-      <Link href="/" className="text-sm text-stone-500 hover:text-titulo">← Actividades</Link>
+      <Link href="/actividades" className="text-sm text-stone-500 hover:text-titulo">← Actividades</Link>
 
       <div>
         <span className="chip chip-texto inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold" style={{ ["--c" as string]: t.color }}>
@@ -83,13 +88,8 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
         {a.notas && <p className="mt-3 whitespace-pre-line text-sm">{a.notas}</p>}
       </div>
 
-      {fotos.length > 0 && (
-        <section className="space-y-3">
-          <h2 className={ui.h2}>Fotos ({fotos.length})</h2>
-          <Album fotos={fotos} />
-        </section>
-      )}
-
+      <div className="grid items-start gap-5 lg:grid-cols-5">
+        <div className="space-y-5 lg:col-span-3">
       {pasaLista && (
         <section className="space-y-3">
           <PaseLista
@@ -110,6 +110,15 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
         </section>
       )}
 
+      {fotos.length > 0 && (
+        <section className="space-y-3">
+          <h2 className={ui.h2}>Fotos ({fotos.length})</h2>
+          <Album fotos={fotos} />
+        </section>
+      )}
+
+        </div>
+        <div className="space-y-5 lg:col-span-2">
       {veDinero && (
         <section className={`${ui.card} space-y-3`}>
           <div className="flex items-center justify-between gap-3">
@@ -122,8 +131,8 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
             <div className="rounded-xl bg-marca-claro p-2"><p className="text-[11px] text-titulo">{entro - salio >= 0 ? "Ganancia" : "Pérdida"}</p><p className="font-semibold tabular-nums text-titulo">{pesos(Math.abs(entro - salio))}</p></div>
           </div>
           {movs.length > 0 && (
-            <ul className="divide-y divide-stone-200/70">
-              {movs.map((m) => <MovimientoFila key={m.id} m={m} puedeAnular />)}
+            <ul className="-mx-5 divide-y divide-stone-200/70 border-t border-stone-200/70">
+              {movs.map((m) => <MovimientoFila key={m.id} m={m} puedeAnular categoria={catNombre.get(m.categoria) ?? m.categoria} />)}
             </ul>
           )}
         </section>
@@ -147,6 +156,8 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
           </Formulario>
         </details>
       )}
+        </div>
+      </div>
     </div>
   );
 }

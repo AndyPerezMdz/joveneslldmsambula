@@ -14,7 +14,7 @@ export default async function Nueva() {
   await requerir(puedeOrganizar);
   return (
     <div className="space-y-6">
-      <Link href="/" className="text-sm text-stone-500 hover:text-titulo">← Actividades</Link>
+      <Link href="/actividades" className="text-sm text-stone-500 hover:text-titulo">← Actividades</Link>
       <h1 className={ui.h1}>Nueva actividad</h1>
       <Formulario action={crearActividad} className={`${ui.card} space-y-6`}>
         <ActividadCampos fecha={hoy()} />

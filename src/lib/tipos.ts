@@ -58,27 +58,18 @@ export const puedeOrganizar = (p: P) => !!p && (esEncargado(p) || p.equipos.leng
 
 // ---------- Finanzas ----------
 export type TipoMov = "entrada" | "salida";
-export type CategoriaMov =
-  | "venta" | "cooperacion" | "donacion" | "ofrenda"
-  | "compra" | "comida" | "transporte" | "material" | "otro";
+/** Categoría de dinero (tabla `categorias`; finanzas puede crear más). */
+export type Categoria = { id: string; nombre: string; tipo: TipoMov | "ambos"; activa: boolean };
+export const SELECT_CAT = "id, nombre, tipo, activa";
 
-export const CATEGORIAS: { v: CategoriaMov; n: string; para: TipoMov | "ambos" }[] = [
-  { v: "venta", n: "Venta", para: "entrada" },
-  { v: "cooperacion", n: "Cooperación", para: "entrada" },
-  { v: "donacion", n: "Donación", para: "entrada" },
-  { v: "ofrenda", n: "Ofrenda", para: "entrada" },
-  { v: "compra", n: "Compra", para: "salida" },
-  { v: "comida", n: "Comida", para: "salida" },
-  { v: "transporte", n: "Transporte", para: "salida" },
-  { v: "material", n: "Material", para: "salida" },
-  { v: "otro", n: "Otro", para: "ambos" },
-];
-export const categoria = (v: CategoriaMov) => CATEGORIAS.find((c) => c.v === v)?.n ?? "Otro";
+/** "Renta de sillas" → "renta-de-sillas" */
+export const claveCategoria = (n: string) =>
+  n.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
 
 export type Movimiento = {
   id: string;
   tipo: TipoMov;
-  categoria: CategoriaMov;
+  categoria: string;
   concepto: string;
   monto: number;
   fecha: string;

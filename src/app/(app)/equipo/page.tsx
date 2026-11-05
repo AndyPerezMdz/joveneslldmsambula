@@ -29,7 +29,7 @@ export default async function Equipo() {
         </p>
       </div>
 
-      <ul className="space-y-3">
+      <ul className="grid gap-4 lg:grid-cols-2">
         {cuentas.map((c) => {
           const ligada = fichas.find((f) => f.perfil_id === c.id);
           return (

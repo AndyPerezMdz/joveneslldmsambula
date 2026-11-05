@@ -47,3 +47,13 @@ export function haceCuanto(f: string, ref = hoy()): string {
   const s = Math.floor(dias / 7);
   return s === 1 ? "hace 1 semana" : `hace ${s} semanas`;
 }
+
+/** "2026-11", -1 → "2026-10" */
+export function mesVecino(mes: string, n: number): string {
+  const [a, m] = mes.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1 + n, 1)).toISOString().slice(0, 7);
+}
+
+/** "2026-11" → "noviembre de 2026" */
+export const nombreMes = (mes: string) =>
+  new Date(`${mes}-15T12:00:00Z`).toLocaleDateString("es-MX", { timeZone: "UTC", month: "long", year: "numeric" });

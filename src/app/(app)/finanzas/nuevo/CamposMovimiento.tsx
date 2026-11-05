@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { CATEGORIAS, type TipoMov } from "@/lib/tipos";
+import type { Categoria, TipoMov } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 
 /** Entrada/salida cambia las categorías que se ofrecen. */
-export function CamposMovimiento({ tipoInicial, fecha, actividades, actividad }: {
+export function CamposMovimiento({ tipoInicial, fecha, actividades, actividad, categorias }: {
   tipoInicial: TipoMov;
+  categorias: Categoria[];
   fecha: string;
   actividades: { id: string; titulo: string; fecha: string }[];
   actividad?: string;
@@ -40,7 +41,8 @@ export function CamposMovimiento({ tipoInicial, fecha, actividades, actividad }:
       setVista(null);
     }
   }
-  const cats = CATEGORIAS.filter((c) => c.para === tipo || c.para === "ambos");
+  const cats = categorias.filter((c) => c.tipo === tipo || c.tipo === "ambos");
+  const [cat, setCat] = useState(cats[0]?.id ?? "__nueva");
 
   return (
     <div className="grid gap-4 sm:grid-cols-2">
@@ -53,7 +55,11 @@ export function CamposMovimiento({ tipoInicial, fecha, actividades, actividad }:
                 ? t === "entrada" ? "border-green-700 bg-green-50 text-green-800" : "border-red-600 bg-red-50 text-red-700"
                 : "border-stone-200 text-stone-500"
             }`}>
-              <input type="radio" name="tipo" value={t} checked={tipo === t} onChange={() => setTipo(t)} className="sr-only" />
+              <input type="radio" name="tipo" value={t} checked={tipo === t} className="sr-only"
+                onChange={() => {
+                  setTipo(t);
+                  setCat(categorias.find((c) => c.tipo === t || c.tipo === "ambos")?.id ?? "__nueva");
+                }} />
               {t === "entrada" ? "+ Entró" : "− Salió"}
             </label>
           ))}
@@ -65,10 +71,18 @@ export function CamposMovimiento({ tipoInicial, fecha, actividades, actividad }:
       </label>
       <label className={ui.label}>
         Categoría
-        <select key={tipo} name="categoria" defaultValue={cats[0].v} className={ui.input}>
-          {cats.map((c) => <option key={c.v} value={c.v}>{c.n}</option>)}
+        <select key={tipo} name="categoria" defaultValue={cats[0]?.id ?? "__nueva"} onChange={(e) => setCat(e.target.value)} className={ui.input}>
+          {cats.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          <option value="__nueva">+ Otra categoría…</option>
         </select>
       </label>
+      {cat === "__nueva" && (
+        <label className={`${ui.label} sm:col-span-2`}>
+          Nombre de la categoría nueva
+          <input name="categoria_nueva" required autoFocus placeholder="Renta de sillas, Papelería…" className={ui.input} />
+          <span className="mt-1 block text-xs font-normal text-stone-500">Se guarda y queda disponible para los siguientes.</span>
+        </label>
+      )}
       <label className={`${ui.label} sm:col-span-2`}>
         Concepto
         <input name="concepto" required placeholder={tipo === "entrada" ? "Venta de tamales, ofrenda especial…" : "Masa y hojas, gasolina…"} className={ui.input} />

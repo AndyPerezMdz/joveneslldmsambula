@@ -46,6 +46,8 @@ export default async function DetalleCooperacion({ params }: { params: Promise<{
         </p>
       </div>
 
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+      <div className="space-y-5 lg:sticky lg:top-8">
       <div className={`${ui.card} space-y-3`}>
         <div className="flex items-end justify-between gap-3">
           <div>
@@ -59,7 +61,8 @@ export default async function DetalleCooperacion({ params }: { params: Promise<{
         </div>
       </div>
 
-      <ul className="space-y-2">
+      </div>
+      <ul className="space-y-2 lg:col-span-2">
         {orden.map((x) => {
           const falta = Math.max(0, monto - x.aportado);
           const s = estado(x);
@@ -96,13 +99,14 @@ export default async function DetalleCooperacion({ params }: { params: Promise<{
           );
         })}
       </ul>
+      </div>
 
       {(m ?? []).length > 0 && (
         <section className={ui.card}>
           <h2 className={ui.h2}>Pagos registrados</h2>
-          <ul className="mt-2 divide-y divide-stone-200/70">
+          <ul className="-mx-6 mt-2 divide-y divide-stone-200/70 border-t border-stone-200/70">
             {((m ?? []) as Movimiento[]).map((x) => (
-              <MovimientoFila key={x.id} m={x} puedeAnular detalle={x.joven_id ? nombres.get(x.joven_id) : undefined} />
+              <MovimientoFila key={x.id} m={x} puedeAnular categoria="Cooperación" detalle={x.joven_id ? nombres.get(x.joven_id) : undefined} />
             ))}
           </ul>
         </section>

@@ -7,9 +7,14 @@ import { Avisos } from "@/components/Formulario";
 export const metadata: Metadata = {
   title: { default: "Jóvenes · La Luz del Mundo", template: "%s · Jóvenes" },
   description: "Asistencia, finanzas y evidencias del grupo de jóvenes",
+  applicationName: "Jóvenes",
+  // iPhone: que abra a pantalla completa al instalarla desde Safari
+  appleWebApp: { capable: true, title: "Jóvenes", statusBarStyle: "black-translucent" },
+  icons: { apple: "/iconos/apple-touch-icon.png" },
+  formatDetection: { telephone: false },
 };
 
-export const viewport: Viewport = { themeColor: "#0a3156" };
+export const viewport: Viewport = { themeColor: "#0a3156", viewportFit: "cover" };
 
 // Se ejecuta antes de pintar para que no haya parpadeo blanco en modo oscuro.
 // Prioridad: lo que eligió la persona → tema del sistema.
