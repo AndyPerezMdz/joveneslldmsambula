@@ -884,3 +884,37 @@ do $$ declare r record; v uuid; begin
     end if;
   end loop;
 end $$;
+
+-- ============================================================
+-- 13. BUSCAR TU NOMBRE AL REGISTRARTE
+--   "¿No sabes cómo sales en la lista?" → nombres parecidos mientras escribe.
+--   Es público (todavía no hay sesión), así que va con candados:
+--   mínimo 3 letras, máximo 5 resultados, solo fichas activas SIN cuenta y solo el nombre.
+-- ============================================================
+create or replace function public.buscar_nombres(p_texto text)
+returns table (nombre text)
+language sql stable security definer set search_path = public as $$
+  with buscado as (
+    select array_remove(string_to_array(public.normalizar_nombre(p_texto), ' '), '') as p
+  )
+  select j.nombre
+    from public.jovenes j, buscado b
+   where length(replace(public.normalizar_nombre(p_texto), ' ', '')) >= 3
+     and j.perfil_id is null
+     and j.activo
+     -- cada palabra que escribió es el inicio de alguna palabra del nombre ("abn rib" → "Abner … Ribón")
+     and not exists (
+       select 1 from unnest(b.p) t
+        where not exists (
+          select 1 from unnest(string_to_array(public.normalizar_nombre(j.nombre), ' ')) n
+           where n like t || '%'
+        )
+     )
+   order by
+     -- primero los que empiezan igual que lo que escribió
+     (public.normalizar_nombre(j.nombre) like public.normalizar_nombre(p_texto) || '%') desc,
+     j.nombre
+   limit 5
+$$;
+revoke all on function public.buscar_nombres(text) from public;
+grant execute on function public.buscar_nombres(text) to anon, authenticated;

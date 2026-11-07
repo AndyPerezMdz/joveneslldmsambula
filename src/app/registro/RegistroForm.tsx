@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { ui } from "@/lib/ui";
 import { registrarse } from "./actions";
+import { NombreConSugerencias } from "./NombreConSugerencias";
 
 export function RegistroForm() {
   const [estado, action, pendiente] = useActionState(registrarse, null);
@@ -18,14 +19,7 @@ export function RegistroForm() {
 
   return (
     <form action={action} className="space-y-4">
-      <label className={ui.label}>
-        Nombre completo
-        <input name="nombre" required autoComplete="name" placeholder="Nombre(s) y apellidos"
-          pattern="\s*\S+(\s+\S+)+\s*" title="Escribe tu nombre y al menos un apellido" className={ui.input} />
-        <span className="mt-1 block text-xs font-normal text-stone-500">
-          Como está en la lista del grupo, con apellidos. Así tu cuenta se liga con tu asistencia.
-        </span>
-      </label>
+      <NombreConSugerencias />
       <label className={ui.label}>
         Correo
         <input name="email" type="email" required autoComplete="email" placeholder="tucorreo@ejemplo.com" className={ui.input} />

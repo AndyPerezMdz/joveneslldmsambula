@@ -48,6 +48,10 @@ Evidencias) y abajo la **Dirección** (admins y encargados generales), que solo 
 cuenta con el nombre importado aunque falte un apellido o no lleve acentos ("abner ribon dzul" →
 "Abner Manuel Ribón Dzul"), solo si hay **una** ficha que cuadre.
 
+**Buscar tu nombre al registrarte** (`buscar_nombres`): mientras escribe su nombre, salen hasta 5
+nombres parecidos de la lista y con "Soy yo" se escribe exacto (así se liga sí o sí). Como la página
+es pública: mínimo 3 letras, máximo 5 resultados, solo fichas activas sin cuenta y solo el nombre.
+
 **Todos los que crean cuenta aparecen en Jóvenes** (`asegurar_ficha`): se ligan a su ficha por correo,
 luego por nombre, y si no hay, se les crea una. Si alguien quedó repetido ("Andy" y "Andrés Pérez"),
 en Jóvenes → su ficha → **Juntar con…** (`fusionar_jovenes`) se pasa su asistencia y pagos a una sola.
