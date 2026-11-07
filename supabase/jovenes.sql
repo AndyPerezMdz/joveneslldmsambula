@@ -738,3 +738,149 @@ language sql stable security invoker set search_path = public as $$
    where not exists (select 1 from public.perfiles p where p.id = j.perfil_id and p.rol = 'admin')
    group by j.id, j.nombre, j.activo
 $$;
+
+-- ============================================================
+-- 12. ENCARGADOS DE CADA GRUPO + LIGAR CUENTAS POR NOMBRE COMPLETO
+--   · perfiles.lider_de: de qué grupos es encargado (puede agregar/quitar miembros de ese grupo).
+--   · Al registrarse con su nombre completo, la cuenta se liga con el nombre importado
+--     aunque falte un apellido o no lleve acentos.
+-- ============================================================
+alter table public.perfiles add column if not exists lider_de public.equipo[] not null default '{}';
+
+-- El encargado de un grupo también es parte de él
+create or replace function public.en_equipo(e public.equipo)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.es_admin()
+      or (e = 'asistencia' and public.es_encargado())
+      or coalesce((select e = any (equipos) or e = any (lider_de) from public.perfiles where id = auth.uid()), false)
+$$;
+
+create or replace function public.es_lider(e public.equipo)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.es_admin()
+      or coalesce((select e = any (lider_de) from public.perfiles where id = auth.uid()), false)
+$$;
+
+create or replace function public.puede_organizar()
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.es_encargado()
+      or coalesce((select cardinality(equipos) > 0 or cardinality(lider_de) > 0 from public.perfiles where id = auth.uid()), false)
+$$;
+
+-- Agregar / quitar a alguien de un grupo (admin o encargado de ese grupo)
+create or replace function public.agregar_a_grupo(p_perfil uuid, p_equipo public.equipo)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.es_lider(p_equipo) then raise exception 'Solo el encargado de ese grupo puede agregar miembros.'; end if;
+  update public.perfiles
+     set equipos = array(select distinct unnest(equipos || p_equipo))
+   where id = p_perfil;
+  if not found then raise exception 'No se encontró esa cuenta.'; end if;
+end $$;
+
+create or replace function public.quitar_de_grupo(p_perfil uuid, p_equipo public.equipo)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.es_lider(p_equipo) then raise exception 'Solo el encargado de ese grupo puede quitar miembros.'; end if;
+  if p_perfil = auth.uid() and not public.es_admin() then raise exception 'No te puedes quitar a ti mismo.'; end if;
+  if not public.es_admin() and exists (select 1 from public.perfiles where id = p_perfil and p_equipo = any (lider_de)) then
+    raise exception 'A otro encargado solo lo puede quitar un admin.';
+  end if;
+  update public.perfiles
+     set equipos = array_remove(equipos, p_equipo), lider_de = array_remove(lider_de, p_equipo)
+   where id = p_perfil;
+end $$;
+
+-- Hacer / dejar de ser encargado de un grupo (solo admin)
+create or replace function public.cambiar_lider(p_perfil uuid, p_equipo public.equipo, p_lider boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.es_admin() then raise exception 'Solo un admin puede nombrar encargados de grupo.'; end if;
+  update public.perfiles set
+    lider_de = case when p_lider then array(select distinct unnest(lider_de || p_equipo)) else array_remove(lider_de, p_equipo) end,
+    equipos  = array(select distinct unnest(equipos || p_equipo))
+   where id = p_perfil;
+end $$;
+grant execute on function public.agregar_a_grupo(uuid, public.equipo), public.quitar_de_grupo(uuid, public.equipo),
+  public.cambiar_lider(uuid, public.equipo, boolean), public.es_lider(public.equipo) to authenticated;
+
+-- ---------- Buscar la ficha por nombre completo ----------
+-- "abner ribon dzul" encuentra "Abner Manuel Ribón Dzul": todas las palabras que escribió
+-- (mínimo nombre y apellido) están en la ficha. Solo si hay UNA que cuadre.
+create or replace function public.ficha_por_nombre(p_nombre text)
+returns uuid language sql stable security definer set search_path = public as $$
+  with buscado as (
+    select array_remove(string_to_array(public.normalizar_nombre(p_nombre), ' '), '') as p
+  ), candidatas as (
+    select j.id,
+           public.normalizar_nombre(j.nombre) = public.normalizar_nombre(p_nombre) as exacta
+      from public.jovenes j, buscado b
+     where j.perfil_id is null
+       and cardinality(b.p) >= 2
+       and b.p <@ array_remove(string_to_array(public.normalizar_nombre(j.nombre), ' '), '')
+  )
+  select coalesce(
+    (select id from candidatas where exacta limit 1),
+    (select id from candidatas where (select count(*) from candidatas) = 1)
+  )
+$$;
+revoke all on function public.ficha_por_nombre(text) from public, anon, authenticated;
+
+create or replace function public.asegurar_ficha(p_perfil uuid)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  p public.perfiles;
+  v uuid;
+begin
+  select * into p from public.perfiles where id = p_perfil;
+  if not found then return null; end if;
+  select id into v from public.jovenes where perfil_id = p.id;
+  if found then return v; end if;
+
+  -- 1) por correo
+  update public.jovenes set perfil_id = p.id
+   where id = (select id from public.jovenes where perfil_id is null and email = p.email limit 1)
+  returning id into v;
+  if v is not null then return v; end if;
+
+  -- 2) por nombre completo (aunque falte un apellido o no lleve acentos)
+  v := public.ficha_por_nombre(p.nombre);
+  if v is not null then
+    update public.jovenes set perfil_id = p.id, email = coalesce(email, p.email) where id = v;
+    return v;
+  end if;
+
+  -- 3) ficha nueva. Nunca debe tumbar un registro.
+  begin
+    insert into public.jovenes (nombre, email, perfil_id)
+    values (case when length(trim(p.nombre)) > 1 then trim(p.nombre) else 'Sin nombre' end, p.email, p.id)
+    returning id into v;
+  exception when unique_violation then
+    begin
+      insert into public.jovenes (nombre, email, perfil_id)
+      values (case when length(trim(p.nombre)) > 1 then trim(p.nombre) else 'Sin nombre' end || ' (' || split_part(coalesce(p.email, p.id::text), '@', 1) || ')', p.email, p.id)
+      returning id into v;
+    exception when others then v := null;
+    end;
+  when others then v := null;
+  end;
+  return v;
+end $$;
+
+-- Cuentas que ya existían: si su ficha se creó sola (sin asistencia ni pagos) y ahora hay
+-- un nombre importado que cuadra, se pasan a ese y se borra la ficha vacía.
+do $$ declare r record; v uuid; begin
+  for r in
+    select p.id as perfil, p.nombre, j.id as ficha
+      from public.perfiles p join public.jovenes j on j.perfil_id = p.id
+     where not exists (select 1 from public.asistencias a where a.joven_id = j.id)
+       and not exists (select 1 from public.movimientos m where m.joven_id = j.id)
+  loop
+    v := public.ficha_por_nombre(r.nombre);
+    if v is not null and v <> r.ficha then
+      update public.jovenes set perfil_id = null where id = r.ficha;
+      delete from public.jovenes where id = r.ficha;
+      update public.jovenes set perfil_id = r.perfil where id = v;
+    end if;
+  end loop;
+end $$;

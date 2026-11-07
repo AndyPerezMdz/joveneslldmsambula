@@ -36,19 +36,24 @@ export async function getSesion() {
   } = await supabase.auth.getUser();
   if (!user) return { supabase, user: null, perfil: null } as const;
 
-  const { data: perfil } = await supabase
-    .from("perfiles")
-    .select("id, nombre, rol, equipos, lider_de")
-    .eq("id", user.id)
-    .single<Perfil>();
+  // "*" a propósito: si la base todavía no tiene alguna columna nueva (se subió el código
+  // antes de correr el SQL), la consulta no truena y la app sigue funcionando.
+  const { data } = await supabase.from("perfiles").select("*").eq("id", user.id).maybeSingle();
+  const perfil: Perfil | null = data
+    ? { id: data.id, nombre: data.nombre, rol: data.rol, equipos: data.equipos ?? [], lider_de: data.lider_de ?? [] }
+    : null;
 
   return { supabase, user, perfil } as const;
 }
 
-/** Para páginas internas: sin sesión → /login. */
+/**
+ * Para páginas internas: sin sesión → /login.
+ * Con sesión pero sin perfil → /sin-perfil (si se mandara a /login, se quedaría en un bucle).
+ */
 export async function requerirMiembro() {
   const s = await getSesion();
-  if (!s.user || !s.perfil) redirect("/login");
+  if (!s.user) redirect("/login");
+  if (!s.perfil) redirect("/sin-perfil");
   return { supabase: s.supabase, user: s.user, perfil: s.perfil };
 }
 

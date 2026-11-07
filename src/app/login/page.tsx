@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/AuthShell";
+import { getSesion } from "@/lib/supabase/server";
 import { LoginForm } from "./LoginForm";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +9,9 @@ export const metadata = { title: "Entrar" };
 
 export default async function Login({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   const { next, error } = await searchParams;
+  // Si ya hay sesión, no tiene caso mostrar el login: se va a la app (o a explicar qué falta)
+  const { user, perfil } = await getSesion();
+  if (user) redirect(perfil ? "/" : "/sin-perfil");
   return (
     <AuthShell titulo="Jóvenes" subtitulo="Asistencia, finanzas y evidencias del grupo">
       {error === "link" && (
