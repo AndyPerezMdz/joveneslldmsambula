@@ -2,7 +2,7 @@ export type RolApp = "admin" | "encargado" | "joven";
 export type Equipo = "asistencia" | "finanzas" | "evidencias";
 export type TipoActividad = "culto" | "venta" | "salida" | "reunion" | "otra";
 
-export type Perfil = { id: string; nombre: string; rol: RolApp; equipos: Equipo[] };
+export type Perfil = { id: string; nombre: string; rol: RolApp; equipos: Equipo[]; lider_de: Equipo[] };
 
 export type Actividad = {
   id: string;
@@ -59,7 +59,7 @@ export const tipo = (v: TipoActividad) => TIPOS.find((t) => t.v === v) ?? TIPOS[
 /** Semanas sin venir a partir de las cuales hay que buscar a alguien */
 export const SEMANAS_ALERTA = 3;
 
-type P = Pick<Perfil, "rol" | "equipos"> | null | undefined;
+type P = (Pick<Perfil, "rol" | "equipos"> & { lider_de?: Equipo[] }) | null | undefined;
 export const esAdmin = (p: P) => p?.rol === "admin";
 export const esEncargado = (p: P) => p?.rol === "admin" || p?.rol === "encargado";
 /**
@@ -67,9 +67,13 @@ export const esEncargado = (p: P) => p?.rol === "admin" || p?.rol === "encargado
  * finanzas y evidencias, solo quien esté en ese equipo.
  */
 export const enEquipo = (p: P, e: Equipo) =>
-  !!p && (esAdmin(p) || (e === "asistencia" && esEncargado(p)) || p.equipos.includes(e));
+  !!p && (esAdmin(p) || (e === "asistencia" && esEncargado(p)) || p.equipos.includes(e) || !!p.lider_de?.includes(e));
+/** Encargado de ese grupo (o admin): puede agregar y quitar miembros. */
+export const esLider = (p: P, e: Equipo) => !!p && (esAdmin(p) || !!p.lider_de?.includes(e));
+/** Ve la pantalla Equipo: admins y encargados de algún grupo. */
+export const veEquipo = (p: P) => !!p && (esAdmin(p) || (p.lider_de?.length ?? 0) > 0);
 /** Cualquiera de un equipo puede crear actividades. */
-export const puedeOrganizar = (p: P) => !!p && (esEncargado(p) || p.equipos.length > 0);
+export const puedeOrganizar = (p: P) => !!p && (esEncargado(p) || p.equipos.length > 0 || (p.lider_de?.length ?? 0) > 0);
 
 // ---------- Finanzas ----------
 export type TipoMov = "entrada" | "salida";

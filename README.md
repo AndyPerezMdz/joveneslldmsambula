@@ -39,6 +39,15 @@ Equipos (`perfiles.equipos`, puede tener varios): `asistencia` (pasa lista, mant
 `finanzas` (solo ellos y admins ven el dinero), `evidencias` (solo ellos y admins ven las fotos).
 Cualquiera que esté en un equipo puede crear actividades.
 
+**Encargado de cada grupo** (`perfiles.lider_de`): lo nombra un admin en **Equipo**. Puede agregar y
+quitar miembros de **su** grupo (`agregar_a_grupo`, `quitar_de_grupo`), pero no de otros, y no puede
+quitar a otro encargado. La pantalla Equipo está acomodada por grupos (Asistencia, Finanzas,
+Evidencias) y abajo la **Dirección** (admins y encargados generales), que solo ve un admin.
+
+**Registro con nombre completo**: se pide nombre y al menos un apellido. `ficha_por_nombre` liga la
+cuenta con el nombre importado aunque falte un apellido o no lleve acentos ("abner ribon dzul" →
+"Abner Manuel Ribón Dzul"), solo si hay **una** ficha que cuadre.
+
 **Todos los que crean cuenta aparecen en Jóvenes** (`asegurar_ficha`): se ligan a su ficha por correo,
 luego por nombre, y si no hay, se les crea una. Si alguien quedó repetido ("Andy" y "Andrés Pérez"),
 en Jóvenes → su ficha → **Juntar con…** (`fusionar_jovenes`) se pasa su asistencia y pagos a una sola.

@@ -19,7 +19,7 @@ export function TarjetaActividad({ a, extra, destacada = false, compacta = false
   return (
     <Link
       href={`/actividades/${a.id}`}
-      className={`flex items-center gap-3 rounded-2xl border p-3 pr-3 transition hover:-translate-y-px hover:border-oro/60 hover:shadow-md sm:gap-4 sm:pr-4 ${
+      className={`flex items-center gap-3 rounded-2xl border p-3 pr-3 transition duration-200 hover:-translate-y-0.5 hover:border-oro/60 hover:shadow-md active:scale-[.985] sm:gap-4 sm:pr-4 ${
         destacada ? "border-oro/50 bg-oro-suave" : "border-stone-200/70 bg-superficie"
       }`}
     >

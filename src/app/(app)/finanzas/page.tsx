@@ -67,7 +67,7 @@ export default async function Finanzas({ searchParams }: { searchParams: Promise
       </Encabezado>
 
       {/* Fila de indicadores */}
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="escalonado mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-b from-marca-medio to-marca p-4 text-white shadow-lg shadow-marca/20 col-span-2 lg:col-span-1">
           <div className="rayos absolute inset-0 opacity-50" />
           <p className="relative text-xs font-medium text-white/70">Saldo actual</p>

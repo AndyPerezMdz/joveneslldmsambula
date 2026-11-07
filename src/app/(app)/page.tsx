@@ -110,7 +110,7 @@ export default async function Inicio() {
       </Encabezado>
 
       {indicadores.length > 0 && (
-        <div className={`mb-5 grid grid-cols-2 gap-3 ${indicadores.length >= 4 ? "lg:grid-cols-4" : indicadores.length === 3 ? "lg:grid-cols-3" : ""}`}>
+        <div className={`escalonado mb-5 grid grid-cols-2 gap-3 ${indicadores.length >= 4 ? "lg:grid-cols-4" : indicadores.length === 3 ? "lg:grid-cols-3" : ""}`}>
           {indicadores.map((k, i) => (
             <div key={k.etiqueta} className={indicadores.length % 2 && i === indicadores.length - 1 ? "col-span-2 lg:col-span-1" : ""}>
               <Indicador {...k} />
@@ -120,7 +120,7 @@ export default async function Inicio() {
       )}
 
       <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
+        <div className="escalonado space-y-5 lg:col-span-2">
           {deHoy.length > 0 && (
             <Tarjeta titulo="Hoy" tono="oro" accion="Semana" href="/actividades">
               <div className="space-y-2">
@@ -157,7 +157,7 @@ export default async function Inicio() {
           )}
         </div>
 
-        <div className="space-y-5">
+        <div className="escalonado space-y-5">
           {pendientes.length > 0 && (
             <Tarjeta titulo="Te falta cooperar" tono="oro">
               <ul className="divide-y divide-oro/30">

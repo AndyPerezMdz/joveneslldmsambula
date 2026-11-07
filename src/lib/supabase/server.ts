@@ -38,7 +38,7 @@ export async function getSesion() {
 
   const { data: perfil } = await supabase
     .from("perfiles")
-    .select("id, nombre, rol, equipos")
+    .select("id, nombre, rol, equipos, lider_de")
     .eq("id", user.id)
     .single<Perfil>();
 

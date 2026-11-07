@@ -1,4 +1,4 @@
-import { enEquipo, esAdmin, esEncargado, type Perfil } from "@/lib/tipos";
+import { enEquipo, esEncargado, veEquipo, type Perfil } from "@/lib/tipos";
 
 export type ClaveMenu = "inicio" | "actividades" | "jovenes" | "finanzas" | "evidencias" | "reportes" | "equipo";
 export type ItemMenu = { href: string; n: string; icono: ClaveMenu };
@@ -12,6 +12,6 @@ export function menuPara(p: Perfil): ItemMenu[] {
     ...(enEquipo(p, "finanzas") ? [{ href: "/finanzas", n: "Finanzas", icono: "finanzas" as const }] : []),
     ...(enEquipo(p, "evidencias") ? [{ href: "/evidencias", n: "Evidencias", icono: "evidencias" as const }] : []),
     ...(esEncargado(p) || enEquipo(p, "finanzas") ? [{ href: "/reportes", n: "Reportes", icono: "reportes" as const }] : []),
-    ...(esAdmin(p) ? [{ href: "/equipo", n: "Equipo", icono: "equipo" as const }] : []),
+    ...(veEquipo(p) ? [{ href: "/equipo", n: "Equipo", icono: "equipo" as const }] : []),
   ];
 }

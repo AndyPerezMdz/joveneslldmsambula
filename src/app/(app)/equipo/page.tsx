@@ -1,123 +1,193 @@
 import { Formulario } from "@/components/Formulario";
+import { IcEvidencias, IcFinanzas, IcJovenes } from "@/components/Iconos";
 import { Submit } from "@/components/Submit";
 import { Encabezado } from "@/components/Tarjeta";
 import { requerir } from "@/lib/supabase/server";
-import { EQUIPOS, esAdmin, type Equipo as TipoEquipo, type Perfil, type RolApp } from "@/lib/tipos";
+import { esAdmin, esLider, veEquipo, type Equipo as TipoEquipo, type Perfil } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
-import { actualizarCuenta, agregarAlEquipo, quitarDelEquipo } from "./actions";
+import { agregarAGrupo, cambiarLider, cambiarRol, quitarDeGrupo } from "./actions";
 
 export const metadata = { title: "Equipo" };
 
 type Cuenta = Perfil & { email: string | null };
 
-const ROLES_EQUIPO: { v: RolApp; n: string; d: string }[] = [
-  { v: "joven", n: "Miembro de equipo", d: "Solo lo de sus equipos" },
-  { v: "encargado", n: "Encargado", d: "Asistencia, actividades y reportes" },
-  { v: "admin", n: "Admin", d: "Todo, incluida esta pantalla" },
+const GRUPOS: { v: TipoEquipo; n: string; d: string; Icono: (p: { className?: string }) => React.JSX.Element }[] = [
+  { v: "asistencia", n: "Asistencia", d: "Pasan lista y llevan la lista de jóvenes.", Icono: IcJovenes },
+  { v: "finanzas", n: "Finanzas", d: "Entradas, salidas, cooperaciones y tickets.", Icono: IcFinanzas },
+  { v: "evidencias", n: "Evidencias", d: "Suben las fotos de cada actividad a Drive.", Icono: IcEvidencias },
 ];
 
-function CamposRol({ rol = "joven", equipos = [] }: { rol?: RolApp; equipos?: TipoEquipo[] }) {
+const inicial = (n: string) => n.trim().charAt(0).toUpperCase() || "?";
+
+function Persona({ c, etiqueta, children }: { c: Cuenta; etiqueta?: React.ReactNode; children?: React.ReactNode }) {
   return (
-    <>
-      <label className={ui.label}>
-        Rol
-        <select name="rol" defaultValue={rol} className={ui.input}>
-          {ROLES_EQUIPO.map((r) => <option key={r.v} value={r.v}>{r.n}</option>)}
-        </select>
-        <span className="mt-1.5 block space-y-0.5 text-xs font-normal text-stone-500">
-          {ROLES_EQUIPO.map((r) => <span key={r.v} className="block"><b className="font-semibold">{r.n}:</b> {r.d}</span>)}
-        </span>
-      </label>
-      <fieldset>
-        <legend className={ui.label}>Equipos</legend>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {EQUIPOS.map((e) => (
-            <label key={e.v} className="flex cursor-pointer items-center gap-2 rounded-xl border border-stone-200 px-3 py-2 text-sm has-[:checked]:border-oro has-[:checked]:bg-oro-suave">
-              <input type="checkbox" name="equipos" value={e.v} defaultChecked={equipos.includes(e.v)} className="size-4" />
-              {e.n}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-    </>
+    <li className="flex items-start gap-3 py-2.5">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-marca-claro text-sm font-bold text-titulo">{inicial(c.nombre)}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium leading-snug">{c.nombre}</span>
+        {etiqueta && <span className="block truncate">{etiqueta}</span>}
+        {children && <span className="-ml-2.5 mt-0.5 flex flex-wrap items-center">{children}</span>}
+      </span>
+    </li>
   );
 }
 
 export default async function Equipo() {
-  const { supabase, perfil: yo } = await requerir(esAdmin);
-  const { data } = await supabase.from("perfiles").select("id, nombre, email, rol, equipos").order("nombre");
+  const { supabase, perfil: yo } = await requerir(veEquipo);
+  const admin = esAdmin(yo);
+  const { data } = await supabase.from("perfiles").select("id, nombre, email, rol, equipos, lider_de").order("nombre");
   const cuentas = (data ?? []) as Cuenta[];
-  const enEquipo = cuentas.filter((c) => c.rol !== "joven" || c.equipos.length > 0)
-    .sort((a, b) => ["admin", "encargado", "joven"].indexOf(a.rol) - ["admin", "encargado", "joven"].indexOf(b.rol) || a.nombre.localeCompare(b.nombre, "es"));
-  const disponibles = cuentas.filter((c) => c.rol === "joven" && c.equipos.length === 0);
-
-  const etiquetaRol = (r: RolApp) => ({ admin: "Admin", encargado: "Encargado", joven: "Miembro" })[r];
+  const misGrupos = GRUPOS.filter((g) => esLider(yo, g.v));
+  const direccion = cuentas.filter((c) => c.rol !== "joven");
 
   return (
     <>
-      <Encabezado titulo="Equipo" sub="Quién puede hacer qué. Finanzas y evidencias solo las ve quien está en ese equipo (y los admins)." />
+      <Encabezado titulo="Equipo"
+        sub={admin
+          ? "Cada grupo con su encargado y sus miembros. El encargado de un grupo puede agregar y quitar gente de ese grupo."
+          : "Agrega o quita miembros de tu grupo. Solo salen quienes ya crearon su cuenta."} />
 
-      <div className="grid items-start gap-5 lg:grid-cols-3">
-        <ul className="grid gap-4 lg:col-span-2 xl:grid-cols-2">
-          {enEquipo.map((c) => (
-            <li key={c.id} className={`${ui.card} space-y-4 p-5`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-titulo">{c.nombre}{c.id === yo.id && <span className="ml-2 text-xs font-normal text-stone-400">(tú)</span>}</p>
-                  <p className="truncate text-xs text-stone-500">{c.email}</p>
-                </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${c.rol === "admin" ? "bg-marca text-white" : c.rol === "encargado" ? "bg-oro-suave text-titulo" : "bg-stone-100 text-stone-600"}`}>
-                  {etiquetaRol(c.rol)}
+      {/* ---- Grupos ---- */}
+      <div className="grid items-start gap-5 lg:grid-cols-3 escalonado">
+        {misGrupos.map((g) => {
+          const lideres = cuentas.filter((c) => c.lider_de.includes(g.v));
+          const miembros = cuentas.filter((c) => c.equipos.includes(g.v) && !c.lider_de.includes(g.v));
+          const disponibles = cuentas.filter((c) => c.rol !== "admin" && !c.equipos.includes(g.v) && !c.lider_de.includes(g.v));
+          return (
+            <section key={g.v} className="flex flex-col overflow-hidden rounded-3xl border border-stone-200/70 bg-superficie shadow-[0_1px_2px_rgb(23_32_44/0.04)]">
+              <header className="flex items-start gap-3 border-b border-stone-200/70 bg-gradient-to-b from-marca-claro/70 to-transparent p-5">
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-marca text-oro-claro"><g.Icono className="size-5" /></span>
+                <span className="min-w-0">
+                  <span className="flex items-baseline gap-2">
+                    <h2 className="titulo text-xl font-semibold text-titulo">{g.n}</h2>
+                    <span className="text-xs tabular-nums text-stone-500">{lideres.length + miembros.length}</span>
+                  </span>
+                  <span className="block text-xs text-stone-500">{g.d}</span>
                 </span>
-              </div>
-              <details className="group">
-                <summary className="cursor-pointer list-none text-sm text-stone-500 hover:text-titulo">
-                  {c.rol === "admin" ? "Ve todo" : c.equipos.length ? c.equipos.map((e) => EQUIPOS.find((x) => x.v === e)?.n).join(" · ") : c.rol === "encargado" ? "Asistencia y reportes" : "Sin equipo"}
-                  <span className="ml-2 font-semibold text-oro group-open:hidden">Editar</span>
-                </summary>
-                <Formulario action={actualizarCuenta} className="mt-4 space-y-4">
-                  <input type="hidden" name="id" value={c.id} />
-                  <label className={ui.label}>Nombre<input name="nombre" required defaultValue={c.nombre} className={ui.input} /></label>
-                  <CamposRol rol={c.rol} equipos={c.equipos} />
-                  <div className="flex justify-end"><Submit>Guardar</Submit></div>
-                </Formulario>
-                {c.id !== yo.id && (
-                  <Formulario action={quitarDelEquipo} className="mt-3 flex justify-end">
-                    <input type="hidden" name="id" value={c.id} />
-                    <Submit variante="btnMini" confirmar={`¿Quitar a ${c.nombre} del equipo? Sigue en la lista de Jóvenes, pero pierde sus permisos.`}>
-                      Quitar del equipo
-                    </Submit>
-                  </Formulario>
-                )}
-              </details>
-            </li>
-          ))}
-        </ul>
+              </header>
 
-        <Formulario action={agregarAlEquipo} className={`${ui.card} space-y-4 lg:sticky lg:top-8`}>
-          <div>
-            <h2 className={ui.h2}>Añadir al equipo</h2>
-            <p className={ui.ayuda}>Solo salen quienes ya crearon su cuenta.</p>
-          </div>
-          {disponibles.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-stone-300 p-4 text-center text-sm text-stone-500">
-              Todos los que tienen cuenta ya están en el equipo. Pídeles que se registren en la app.
-            </p>
-          ) : (
-            <>
-              <label className={ui.label}>
-                ¿Quién?
-                <select name="id" required defaultValue="" className={ui.input}>
-                  <option value="" disabled>Elige a alguien…</option>
-                  {disponibles.map((c) => <option key={c.id} value={c.id}>{c.nombre}{c.email ? ` · ${c.email}` : ""}</option>)}
-                </select>
-              </label>
-              <CamposRol />
-              <Submit>Añadir</Submit>
-            </>
-          )}
-        </Formulario>
+              <div className="flex-1 space-y-4 p-5">
+                <div>
+                  <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-oro">Encargado</h3>
+                  {lideres.length === 0 ? (
+                    <p className="mt-1 text-sm text-stone-500">{admin ? "Sin encargado. Nómbralo de entre los miembros." : "—"}</p>
+                  ) : (
+                    <ul className="divide-y divide-stone-200/70">
+                      {lideres.map((c) => (
+                        <Persona key={c.id} c={c} etiqueta={<span className="text-xs text-stone-500">{c.id === yo.id ? "Tú" : c.email}</span>}>
+                          {admin && (
+                            <Formulario action={cambiarLider}>
+                              <input type="hidden" name="perfil" value={c.id} />
+                              <input type="hidden" name="equipo" value={g.v} />
+                              <input type="hidden" name="lider" value="false" />
+                              <Submit variante="btnMini" confirmar={`¿Quitar a ${c.nombre} como encargado de ${g.n}? Sigue como miembro del grupo.`}>Quitar cargo</Submit>
+                            </Formulario>
+                          )}
+                        </Persona>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div>
+                  <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-stone-500">Miembros</h3>
+                  {miembros.length === 0 ? (
+                    <p className="mt-1 text-sm text-stone-500">Todavía nadie.</p>
+                  ) : (
+                    <ul className="divide-y divide-stone-200/70">
+                      {miembros.map((c) => (
+                        <Persona key={c.id} c={c}>
+                          {admin && (
+                            <Formulario action={cambiarLider} silencioso>
+                              <input type="hidden" name="perfil" value={c.id} />
+                              <input type="hidden" name="equipo" value={g.v} />
+                              <input type="hidden" name="lider" value="true" />
+                              <Submit variante="btnMini">Hacer encargado</Submit>
+                            </Formulario>
+                          )}
+                          <Formulario action={quitarDeGrupo}>
+                            <input type="hidden" name="perfil" value={c.id} />
+                            <input type="hidden" name="equipo" value={g.v} />
+                            <Submit variante="btnMini" confirmar={`¿Quitar a ${c.nombre} de ${g.n}? Deja de ver lo de este grupo.`}>Quitar</Submit>
+                          </Formulario>
+                        </Persona>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+
+              <Formulario action={agregarAGrupo} className="flex items-end gap-2 border-t border-stone-200/70 bg-stone-50/60 p-4">
+                <input type="hidden" name="equipo" value={g.v} />
+                <label className={`${ui.label} min-w-0 flex-1`}>
+                  Agregar a {g.n}
+                  <select name="perfil" required defaultValue="" className={`${ui.input} h-10`} disabled={disponibles.length === 0}>
+                    <option value="" disabled>{disponibles.length ? "Elige a alguien…" : "Ya están todos"}</option>
+                    {disponibles.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
+                </label>
+                <Submit>Agregar</Submit>
+              </Formulario>
+            </section>
+          );
+        })}
       </div>
+
+      {/* ---- Dirección (solo admin) ---- */}
+      {admin && (
+        <section className="mt-8 grid items-start gap-5 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <h2 className="titulo mb-1 text-xl font-semibold text-titulo">Dirección</h2>
+            <p className="mb-3 text-sm text-stone-500">
+              <b>Admins</b>: ven todo y manejan esta pantalla. <b>Encargados generales</b>: asistencia, actividades,
+              horarios y reportes (no ven dinero ni fotos si no están en esos grupos).
+            </p>
+            <ul className="grid gap-3 sm:grid-cols-2">
+              {direccion.map((c) => (
+                <li key={c.id} className="rounded-2xl border border-stone-200/70 bg-superficie p-4">
+                  <Formulario action={cambiarRol} className="space-y-3">
+                    <input type="hidden" name="perfil" value={c.id} />
+                    <div className="flex items-center gap-3">
+                      <span className={`flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${c.rol === "admin" ? "bg-marca text-oro-claro" : "bg-oro-suave text-titulo"}`}>{inicial(c.nombre)}</span>
+                      <span className="min-w-0 flex-1">
+                        <input name="nombre" defaultValue={c.nombre} aria-label="Nombre" className="w-full truncate rounded-lg bg-transparent px-1 text-sm font-medium outline-none focus:bg-stone-50 focus:ring-2 focus:ring-oro/30" />
+                        <span className="block truncate px-1 text-xs text-stone-500">{c.id === yo.id ? "Tú · " : ""}{c.email}</span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select name="rol" defaultValue={c.rol} className={`${ui.input} mt-0 h-11 flex-1 text-sm`} aria-label="Rol">
+                        <option value="admin">Admin</option>
+                        <option value="encargado">Encargado general</option>
+                        <option value="joven">Sin cargo</option>
+                      </select>
+                      <Submit variante="btnSec">Guardar</Submit>
+                    </div>
+                  </Formulario>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <Formulario action={cambiarRol} className={`${ui.card} space-y-4 lg:mt-14`}>
+            <h3 className={ui.h2}>Dar un cargo</h3>
+            <label className={ui.label}>
+              ¿Quién?
+              <select name="perfil" required defaultValue="" className={ui.input}>
+                <option value="" disabled>Elige a alguien…</option>
+                {cuentas.filter((c) => c.rol === "joven").map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              </select>
+            </label>
+            <label className={ui.label}>
+              Cargo
+              <select name="rol" defaultValue="encargado" className={ui.input}>
+                <option value="encargado">Encargado general</option>
+                <option value="admin">Admin</option>
+              </select>
+            </label>
+            <Submit>Dar cargo</Submit>
+          </Formulario>
+        </section>
+      )}
     </>
   );
 }

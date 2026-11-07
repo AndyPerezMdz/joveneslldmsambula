@@ -41,7 +41,9 @@ export function Indicador({ etiqueta, valor, detalle, href, color = "text-titulo
     </>
   );
   const cls = "block rounded-2xl border border-stone-200/70 bg-superficie p-4 shadow-[0_1px_2px_rgb(23_32_44/0.04)]";
-  return href ? <Link href={href} className={`${cls} transition hover:border-oro/60`}>{cuerpo}</Link> : <div className={cls}>{cuerpo}</div>;
+  return href
+    ? <Link href={href} className={`${cls} transition duration-200 hover:-translate-y-0.5 hover:border-oro/60 hover:shadow-md active:scale-[.98]`}>{cuerpo}</Link>
+    : <div className={cls}>{cuerpo}</div>;
 }
 
 /** Encabezado de página: título + subtítulo + botones. */

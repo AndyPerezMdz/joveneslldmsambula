@@ -6,11 +6,11 @@ import { createClient } from "@/lib/supabase/server";
 type Estado = { ok: boolean; mensaje: string } | null;
 
 export async function registrarse(_prev: Estado, formData: FormData): Promise<Estado> {
-  const nombre = String(formData.get("nombre") ?? "").trim();
+  const nombre = String(formData.get("nombre") ?? "").trim().replace(/\s+/g, " ");
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
 
-  if (nombre.length < 2) return { ok: false, mensaje: "Escribe tu nombre." };
+  if (nombre.split(" ").length < 2) return { ok: false, mensaje: "Escribe tu nombre completo: nombre y al menos un apellido." };
   if (password.length < 8) return { ok: false, mensaje: "La contraseña necesita mínimo 8 caracteres." };
 
   const origen =

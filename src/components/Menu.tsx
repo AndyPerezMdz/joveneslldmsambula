@@ -71,7 +71,7 @@ export function Menu({ items, nombre }: { items: ItemMenu[]; nombre: string }) {
             const on = activo(path, it.href);
             return (
               <Link key={it.href} href={it.href}
-                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200 hover:translate-x-0.5 ${
                   on ? "bg-white/12 font-semibold text-white ring-1 ring-inset ring-oro-claro/40" : "text-white/70 hover:bg-white/8 hover:text-white"
                 }`}>
                 <Ic className={`size-5 ${on ? "text-oro-claro" : ""}`} />{it.n}
@@ -109,7 +109,7 @@ export function Menu({ items, nombre }: { items: ItemMenu[]; nombre: string }) {
             return (
               <Link key={it.href} href={it.href}
                 className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[10.5px] font-medium ${on ? "text-titulo" : "text-stone-500"}`}>
-                <span className={`flex h-7 w-12 items-center justify-center rounded-full transition ${on ? "bg-oro-suave" : ""}`}><Ic /></span>
+                <span className={`flex h-7 w-12 items-center justify-center rounded-full transition-all duration-300 ${on ? "scale-105 bg-oro-suave" : "scale-100"}`}><Ic /></span>
                 {it.n}
               </Link>
             );

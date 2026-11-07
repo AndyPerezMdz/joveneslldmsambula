@@ -131,8 +131,8 @@ export function PaseLista({ actividadId, jovenes, presentesIniciales, hoy }: {
             )}
             {j.ultima === null && <span className="text-xs text-stone-400">Nunca ha venido</span>}
           </span>
-          <span className={`flex size-6 shrink-0 items-center justify-center rounded-lg border-2 text-sm font-bold ${
-            on ? "border-green-700 bg-green-700 text-white" : "border-stone-300 text-transparent"
+          <span key={on ? "si" : "no"} className={`flex size-6 shrink-0 items-center justify-center rounded-lg border-2 text-sm font-bold transition-colors ${
+            on ? "pop border-green-700 bg-green-700 text-white" : "border-stone-300 text-transparent"
           }`}>✓</span>
         </button>
       </li>

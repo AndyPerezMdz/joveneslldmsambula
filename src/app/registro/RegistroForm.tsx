@@ -19,8 +19,12 @@ export function RegistroForm() {
   return (
     <form action={action} className="space-y-4">
       <label className={ui.label}>
-        Nombre
-        <input name="nombre" required autoComplete="name" placeholder="Como te conocen en la iglesia" className={ui.input} />
+        Nombre completo
+        <input name="nombre" required autoComplete="name" placeholder="Nombre(s) y apellidos"
+          pattern="\s*\S+(\s+\S+)+\s*" title="Escribe tu nombre y al menos un apellido" className={ui.input} />
+        <span className="mt-1 block text-xs font-normal text-stone-500">
+          Como está en la lista del grupo, con apellidos. Así tu cuenta se liga con tu asistencia.
+        </span>
       </label>
       <label className={ui.label}>
         Correo

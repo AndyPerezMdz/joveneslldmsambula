@@ -84,7 +84,7 @@ export default async function Actividades({ searchParams }: { searchParams: Prom
           })}
         </div>
 
-        <div className="grid gap-3 lg:grid-cols-7">
+        <div className="escalonado grid gap-3 lg:grid-cols-7">
           {dias.map((d) => {
             const f = partesFecha(d);
             const esHoy = d === h;

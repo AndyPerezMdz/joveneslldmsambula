@@ -12,10 +12,7 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "Jóvenes", statusBarStyle: "black-translucent" },
   // Pestaña del navegador + iPhone (si se define a mano, hay que poner todos)
   icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "48x48" },
-      { url: "/iconos/icono-192.png", type: "image/png", sizes: "192x192" },
-    ],
+    icon: [{ url: "/iconos/icono-192.png", type: "image/png", sizes: "192x192" }],   // + src/app/favicon.ico
     apple: "/iconos/apple-touch-icon.png",
   },
   formatDetection: { telephone: false },

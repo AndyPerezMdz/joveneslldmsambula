@@ -44,7 +44,7 @@ export default async function Jovenes({ searchParams }: { searchParams: Promise<
         <Link href="/jovenes/importar" className={ui.btnSec}><IcSubir className="size-4" /> Importar lista</Link>
       </Encabezado>
 
-      <div className="mb-5 grid grid-cols-3 gap-3">
+      <div className="escalonado mb-5 grid grid-cols-3 gap-3">
         <Indicador etiqueta="Activos" valor={String(activos.length)} />
         <Indicador etiqueta="Sin venir" valor={String(sinVenir.length)} color={sinVenir.length ? "text-red-700" : "text-titulo"} detalle={`${SEMANAS_ALERTA}+ semanas`} />
         <Indicador etiqueta="Con cuenta" valor={String(conCuenta)} />
