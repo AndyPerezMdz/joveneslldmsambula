@@ -674,13 +674,20 @@ create unique index if not exists actividades_horario_dia on public.actividades 
 -- Horarios de la congregación (solo la primera vez; luego se editan en la app)
 insert into public.horarios (titulo, dias, hora, hora_fin, orden)
 select * from (values
-  ('Oración de 5',             array[1,2,3,4,5,6,7], time '05:00', null::time,   1),
+  ('Oración de 5',             array[1,2,3,4,5,6],   time '05:00', null::time,   1),
   ('Dominical',                array[7],             time '10:00', time '12:00', 2),
   ('Servicio de alabanzas',    array[4,7],           time '18:00', time '20:00', 3),
-  ('Oración de 7',             array[1,2,3,5,6],     time '19:00', null::time,   4),
+  ('Oración de 7',             array[1,2,3,5,6],     time '19:00', time '20:00', 4),
   ('Consagración apostólica',  array[1,2,3,4,5,6,7], time '20:00', null::time,   5)
 ) v(titulo, dias, hora, hora_fin, orden)
 where not exists (select 1 from public.horarios);
+
+-- Corrección de horarios ya cargados: la oración de 5 no es en domingo y la de 7 dura hasta las 8.
+-- Solo toca los que siguen como venían de fábrica (si ya los editaste en la app, no les hace nada).
+update public.horarios set dias = array[1,2,3,4,5,6]
+ where titulo = 'Oración de 5' and dias = array[1,2,3,4,5,6,7];
+update public.horarios set hora_fin = time '20:00'
+ where titulo = 'Oración de 7' and hora_fin is null;
 
 alter table public.horarios enable row level security;
 drop policy if exists "horarios_leer"     on public.horarios;
@@ -723,6 +730,13 @@ end $$;
 drop trigger if exists horarios_ajustar on public.horarios;
 create trigger horarios_ajustar after update on public.horarios
   for each row execute function public.ajustar_horario();
+
+-- Oraciones de 5 en domingo que ya se habían creado y nadie pasó lista: se cancelan
+update public.actividades a set cancelada = true
+  from public.horarios h
+ where a.horario_id = h.id and h.titulo = 'Oración de 5'
+   and extract(isodow from a.fecha)::int = 7 and not a.cancelada
+   and not exists (select 1 from public.asistencias s where s.actividad_id = a.id);
 
 -- La asistencia de actividades canceladas no cuenta
 create or replace function public.resumen_jovenes(p_semanas int default 8)
