@@ -9,8 +9,11 @@ import { asegurarDias } from "@/lib/calendario";
 import { fechaLarga, haceCuanto, horaAhora, hoy, sumarDias } from "@/lib/fechas";
 import { asistenciaEntre, lunes } from "@/lib/resumen";
 import { requerirMiembro } from "@/lib/supabase/server";
-import { enEquipo, hayQueBuscar, puedeOrganizar, SEMANAS_ALERTA, type Actividad, type ResumenJoven } from "@/lib/tipos";
+import { enEquipo, esAdmin, hayQueBuscar, puedeOrganizar, SEMANAS_ALERTA, type Actividad, type ResumenJoven } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
+import { IdeaForm } from "./participar/IdeaForm";
+import { AvisosPorConfirmar, cargarAvisos } from "./participar/AvisosPorConfirmar";
+import { YaPague, type MiAviso } from "./participar/YaPague";
 
 export const metadata = { title: "Inicio" };
 
@@ -41,6 +44,28 @@ export default async function Inicio() {
   const pendientes = ((mc ?? []) as Mia[])
     .filter((c) => !c.excluido && Number(c.aportado) < Number(c.monto))
     .map((c) => ({ ...c, falta: Number(c.monto) - Number(c.aportado) }));
+
+  // ¿Quién puede?: a qué me apunté y dónde todavía hacen falta manos
+  type TareaProx = { id: string; nombre: string; cupo: number | null; actividades: { id: string; titulo: string; fecha: string; hora: string | null; cancelada: boolean };
+    tarea_voluntarios: { joven_id: string }[] };
+  const [{ data: tp }, { data: av }, { data: fin }, { count: ideasNuevas }] = await Promise.all([
+    supabase.from("tareas").select("id, nombre, cupo, actividades!inner(id, titulo, fecha, hora, cancelada), tarea_voluntarios(joven_id)")
+      .gte("actividades.fecha", h).eq("actividades.cancelada", false),
+    ficha ? supabase.from("avisos_pago").select("cooperacion_id, monto, estado, motivo, created_at").eq("joven_id", ficha.id).order("created_at")
+      : Promise.resolve({ data: [] }),
+    supabase.from("perfiles").select("id, nombre, rol, equipos, lider_de").order("nombre"),
+    esAdmin(perfil) ? supabase.from("ideas").select("id", { count: "exact", head: true }).eq("leida", false) : Promise.resolve({ count: 0 }),
+  ]);
+  const tareasProx = ((tp ?? []) as unknown as TareaProx[]).sort((a, b) => a.actividades.fecha.localeCompare(b.actividades.fecha));
+  const misTareas = ficha ? tareasProx.filter((t) => t.tarea_voluntarios.some((v) => v.joven_id === ficha.id)) : [];
+  const faltanManos = tareasProx.filter((t) => !misTareas.includes(t) && (t.cupo === null || t.tarea_voluntarios.length < t.cupo));
+  const necesitan = [...new Map(faltanManos.map((t) => [t.actividades.id, t.actividades])).values()].slice(0, 4);
+  const misAvisos = new Map<string, MiAviso>();
+  for (const x of (av ?? []) as MiAviso[]) misAvisos.set(x.cooperacion_id, x);     // se queda el último
+  type P = { id: string; nombre: string; rol: string; equipos: string[]; lider_de: string[] };
+  const deFinanzas = ((fin ?? []) as P[]).filter((x) => x.equipos?.includes("finanzas") || x.lider_de?.includes("finanzas"));
+  const recibe = deFinanzas.length ? deFinanzas : ((fin ?? []) as P[]).filter((x) => x.rol === "admin");
+  const avisos = veDinero ? await cargarAvisos(supabase) : [];
 
   // Asistencia (equipo de asistencia / encargados)
   let resumen: ResumenJoven[] = [];
@@ -166,14 +191,61 @@ export default async function Inicio() {
               <ul className="divide-y divide-oro/30">
                 {pendientes.map((c) => (
                   <li key={c.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                    <span>
+                    <span className="min-w-0 flex-1">
                       <span className="font-medium">{c.concepto}</span>
                       {c.fecha_limite && <span className="block text-xs text-stone-500">Hasta el {fechaLarga(c.fecha_limite)}</span>}
+                      {ficha && <YaPague cooperacion={c.id} falta={c.falta} aviso={misAvisos.get(c.id)} finanzas={recibe} />}
                     </span>
-                    <span className="font-semibold tabular-nums text-titulo">{pesos(c.falta)}</span>
+                    <span className="self-start font-semibold tabular-nums text-titulo">{pesos(c.falta)}</span>
                   </li>
                 ))}
               </ul>
+            </Tarjeta>
+          )}
+
+          <AvisosPorConfirmar avisos={avisos} />
+
+          {misTareas.length > 0 && (
+            <Tarjeta titulo="Te apuntaste">
+              <ul className="divide-y divide-stone-200/70">
+                {misTareas.map((t) => (
+                  <li key={t.id}>
+                    <Link href={`/apuntarse/${t.actividades.id}`} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">{t.nombre}</span>
+                        <span className="block truncate text-xs text-stone-500">{t.actividades.titulo}</span>
+                      </span>
+                      <span className="shrink-0 text-xs text-stone-500 first-letter:uppercase">{fechaLarga(t.actividades.fecha).split(",")[0]} {t.actividades.fecha.slice(8)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Tarjeta>
+          )}
+
+          {necesitan.length > 0 && (
+            <Tarjeta titulo="¿Quién puede?" tono="oro">
+              <p className="-mt-2 mb-2 text-xs text-titulo/70">Aquí todavía hacen falta manos.</p>
+              <ul className="divide-y divide-oro/30">
+                {necesitan.map((x) => (
+                  <li key={x.id}>
+                    <Link href={`/apuntarse/${x.id}`} className="flex items-center justify-between gap-3 py-2 text-sm">
+                      <span className="truncate font-medium">{x.titulo}</span>
+                      <span className="shrink-0 text-xs font-semibold text-oro">Apuntarme →</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Tarjeta>
+          )}
+
+          {esAdmin(perfil) ? (
+            <Tarjeta titulo="Buzón de ideas" accion="Abrir" href="/ideas">
+              <p className="text-sm text-stone-500">{ideasNuevas ? `${ideasNuevas} sin leer.` : "Nada nuevo."}</p>
+            </Tarjeta>
+          ) : (
+            <Tarjeta titulo="¿Tienes una idea?">
+              <IdeaForm />
             </Tarjeta>
           )}
 

@@ -7,12 +7,13 @@ import { requerirMiembro } from "@/lib/supabase/server";
 import { Album } from "@/components/Album";
 import { pesos } from "@/lib/dinero";
 import { driveListo, ENLACE_SUBIR_FOTOS, fotosDrive, repartir, type Foto } from "@/lib/drive";
-import { bloqueoLista, enEquipo, esEncargado, esLider, puedeOrganizar, SELECT_MOV, tipo, type Actividad, type Movimiento, type ResumenJoven } from "@/lib/tipos";
+import { bloqueoLista, enEquipo, esAdmin, esEncargado, esLider, puedeOrganizar, SELECT_MOV, tipo, type Actividad, type Movimiento, type ResumenJoven } from "@/lib/tipos";
 import { MovimientoFila } from "../../finanzas/MovimientoFila";
 import { ui } from "@/lib/ui";
 import { ActividadCampos } from "../ActividadCampos";
 import { actualizarActividad, agregarYMarcar, borrarActividad, reactivarActividad } from "../actions";
 import { PaseLista } from "./PaseLista";
+import { cargarTareas, Tareas } from "../../participar/Tareas";
 
 export const metadata = { title: "Actividad" };
 
@@ -42,6 +43,14 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
     // Activos + los inactivos que sí vinieron a esta actividad
     lista = ((r ?? []) as ResumenJoven[]).filter((j) => j.activo || presentes.includes(j.joven_id));
   }
+
+  // ¿Quién puede? (tareas y voluntarios)
+  const admin = esAdmin(perfil);
+  const [tareas, { data: yo }, { data: todos }] = await Promise.all([
+    cargarTareas(supabase, a.id),
+    supabase.from("jovenes").select("id").eq("perfil_id", perfil.id).maybeSingle(),
+    admin ? supabase.from("jovenes").select("id, nombre").eq("activo", true).order("nombre") : Promise.resolve({ data: [] }),
+  ]);
 
   // Fotos de esta actividad (desde Drive)
   let fotos: Foto[] = [];
@@ -136,6 +145,8 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
 
         </div>
         <div className="space-y-5 lg:col-span-2">
+      <Tareas a={a} tareas={tareas} miJoven={yo?.id ?? null} admin={admin}
+        jovenes={(todos ?? []) as { id: string; nombre: string }[]} cerrado={!!a.cancelada || a.fecha < hoy()} />
       {veDinero && (
         <section className={`${ui.card} space-y-3`}>
           <div className="flex items-center justify-between gap-3">

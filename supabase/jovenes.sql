@@ -1233,3 +1233,151 @@ $$;
 drop policy if exists "horarios_escribir" on public.horarios;
 create policy "horarios_escribir" on public.horarios for all to authenticated
   using (public.es_admin()) with check (public.es_admin());
+
+-- ============================================================
+-- 17. PARA LOS QUE NO TIENEN COMISIÓN
+--   · ¿Quién puede?  El admin pone tareas a una actividad y comparte un link;
+--     cada quien se apunta con su cuenta. Al que contestó por WhatsApp lo agrega el admin.
+--   · Ya pagué.      El joven avisa que le dio dinero a alguien de finanzas;
+--     finanzas lo confirma (ahí se vuelve movimiento) o lo rechaza.
+--   · Buzón de ideas. Le llegan al admin.
+-- ============================================================
+
+-- ---------- ¿Quién puede? ----------
+create table if not exists public.tareas (
+  id           uuid primary key default gen_random_uuid(),
+  actividad_id uuid not null references public.actividades (id) on delete cascade,
+  nombre       text not null check (length(trim(nombre)) > 0),
+  cupo         int check (cupo is null or cupo > 0),          -- null = los que sean
+  orden        int not null default 100,
+  created_at   timestamptz not null default now()
+);
+create index if not exists tareas_actividad on public.tareas (actividad_id);
+
+create table if not exists public.tarea_voluntarios (
+  tarea_id     uuid not null references public.tareas (id) on delete cascade,
+  joven_id     uuid not null references public.jovenes (id) on delete cascade,
+  agregado_por uuid references public.perfiles (id) on delete set null default auth.uid(),
+  created_at   timestamptz not null default now(),
+  primary key (tarea_id, joven_id)
+);
+create index if not exists voluntarios_joven on public.tarea_voluntarios (joven_id);
+
+alter table public.tareas            enable row level security;
+alter table public.tarea_voluntarios enable row level security;
+drop policy if exists "tareas_leer"          on public.tareas;
+drop policy if exists "tareas_admin"         on public.tareas;
+drop policy if exists "voluntarios_leer"     on public.tarea_voluntarios;
+drop policy if exists "voluntarios_admin"    on public.tarea_voluntarios;
+create policy "tareas_leer"       on public.tareas            for select to authenticated using (public.es_miembro());
+create policy "tareas_admin"      on public.tareas            for all    to authenticated using (public.es_admin()) with check (public.es_admin());
+create policy "voluntarios_leer"  on public.tarea_voluntarios for select to authenticated using (public.es_miembro());
+create policy "voluntarios_admin" on public.tarea_voluntarios for all    to authenticated using (public.es_admin()) with check (public.es_admin());
+grant select, insert, update, delete on public.tareas, public.tarea_voluntarios to authenticated;
+
+-- Apuntarse / quitarse uno mismo (respeta el cupo; solo actividades que no han pasado)
+create or replace function public.apuntarme(p_tarea uuid, p_si boolean)
+returns void language plpgsql security definer set search_path = public as $$
+declare yo uuid := public.mi_joven_id(); t record; n int;
+begin
+  if yo is null then raise exception 'Tu cuenta todavía no está ligada a la lista del grupo. Avísale al admin.'; end if;
+  select ta.id, ta.cupo, a.fecha, a.cancelada into t
+    from public.tareas ta join public.actividades a on a.id = ta.actividad_id
+   where ta.id = p_tarea
+   for update of ta;
+  if not found then raise exception 'Esa tarea ya no existe.'; end if;
+  if not p_si then
+    delete from public.tarea_voluntarios where tarea_id = p_tarea and joven_id = yo;
+    return;
+  end if;
+  if t.cancelada then raise exception 'Esa actividad se canceló.'; end if;
+  if t.fecha < public.hoy() then raise exception 'Esa actividad ya pasó.'; end if;
+  select count(*) into n from public.tarea_voluntarios where tarea_id = p_tarea and joven_id <> yo;
+  if t.cupo is not null and n >= t.cupo then raise exception 'Ya se llenó. Gracias de todos modos.'; end if;
+  insert into public.tarea_voluntarios (tarea_id, joven_id) values (p_tarea, yo) on conflict do nothing;
+end $$;
+revoke all on function public.apuntarme(uuid, boolean) from public;
+grant execute on function public.apuntarme(uuid, boolean) to authenticated;
+
+-- ---------- Ya pagué ----------
+create table if not exists public.avisos_pago (
+  id             uuid primary key default gen_random_uuid(),
+  cooperacion_id uuid not null references public.cooperaciones (id) on delete cascade,
+  joven_id       uuid not null references public.jovenes (id) on delete cascade,
+  monto          numeric(12,2) not null check (monto > 0),
+  recibio        uuid references public.perfiles (id) on delete set null,   -- a quién de finanzas le dio
+  nota           text,
+  estado         text not null default 'pendiente' check (estado in ('pendiente', 'confirmado', 'rechazado')),
+  motivo         text,
+  movimiento_id  uuid references public.movimientos (id) on delete set null,
+  revisado_por   uuid references public.perfiles (id) on delete set null,
+  revisado_at    timestamptz,
+  created_at     timestamptz not null default now()
+);
+create index if not exists avisos_pendientes on public.avisos_pago (estado, cooperacion_id);
+
+alter table public.avisos_pago enable row level security;
+drop policy if exists "avisos_leer" on public.avisos_pago;
+create policy "avisos_leer" on public.avisos_pago for select to authenticated
+  using (public.en_equipo('finanzas') or joven_id = public.mi_joven_id());
+grant select on public.avisos_pago to authenticated;
+
+create or replace function public.avisar_pago(p_cooperacion uuid, p_monto numeric, p_recibio uuid, p_nota text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare yo uuid := public.mi_joven_id();
+begin
+  if yo is null then raise exception 'Tu cuenta todavía no está ligada a la lista del grupo. Avísale al admin.'; end if;
+  if p_monto is null or p_monto <= 0 then raise exception 'Escribe cuánto diste.'; end if;
+  if not exists (select 1 from public.cooperaciones where id = p_cooperacion and not cerrada) then
+    raise exception 'Esa cooperación ya se cerró.';
+  end if;
+  if p_recibio is null or not exists (select 1 from public.perfiles
+       where id = p_recibio and (rol = 'admin' or 'finanzas' = any (equipos) or 'finanzas' = any (lider_de))) then
+    raise exception 'Elige a quién de finanzas le diste el dinero.';
+  end if;
+  if exists (select 1 from public.avisos_pago where cooperacion_id = p_cooperacion and joven_id = yo and estado = 'pendiente') then
+    raise exception 'Ya tienes un aviso esperando a que finanzas lo confirme.';
+  end if;
+  insert into public.avisos_pago (cooperacion_id, joven_id, monto, recibio, nota)
+  values (p_cooperacion, yo, round(p_monto, 2), p_recibio, nullif(trim(coalesce(p_nota, '')), ''));
+end $$;
+
+-- Finanzas: confirmar (se registra el pago) o rechazar (con motivo)
+create or replace function public.revisar_aviso(p_id uuid, p_confirmar boolean, p_motivo text default null)
+returns void language plpgsql security definer set search_path = public as $$
+declare a public.avisos_pago; c public.cooperaciones; nombre text; m uuid;
+begin
+  if not public.en_equipo('finanzas') then raise exception 'Solo finanzas confirma pagos.'; end if;
+  select * into a from public.avisos_pago where id = p_id for update;
+  if not found or a.estado <> 'pendiente' then raise exception 'Ese aviso ya se revisó.'; end if;
+  if not p_confirmar then
+    if length(trim(coalesce(p_motivo, ''))) < 3 then raise exception 'Escribe por qué no se confirma.'; end if;
+    update public.avisos_pago set estado = 'rechazado', motivo = trim(p_motivo), revisado_por = auth.uid(), revisado_at = now() where id = p_id;
+    return;
+  end if;
+  select * into c from public.cooperaciones where id = a.cooperacion_id;
+  select j.nombre into nombre from public.jovenes j where j.id = a.joven_id;
+  insert into public.movimientos (tipo, categoria, concepto, monto, fecha, actividad_id, cooperacion_id, joven_id)
+  values ('entrada', 'cooperacion', c.concepto || ' · ' || nombre, a.monto, public.hoy(), c.actividad_id, c.id, a.joven_id)
+  returning id into m;
+  update public.avisos_pago set estado = 'confirmado', movimiento_id = m, revisado_por = auth.uid(), revisado_at = now() where id = p_id;
+end $$;
+revoke all on function public.avisar_pago(uuid, numeric, uuid, text), public.revisar_aviso(uuid, boolean, text) from public;
+grant execute on function public.avisar_pago(uuid, numeric, uuid, text), public.revisar_aviso(uuid, boolean, text) to authenticated;
+
+-- ---------- Buzón de ideas ----------
+create table if not exists public.ideas (
+  id         uuid primary key default gen_random_uuid(),
+  perfil_id  uuid references public.perfiles (id) on delete set null default auth.uid(),
+  texto      text not null check (length(trim(texto)) between 3 and 1000),
+  leida      boolean not null default false,
+  created_at timestamptz not null default now()
+);
+alter table public.ideas enable row level security;
+drop policy if exists "ideas_leer"     on public.ideas;
+drop policy if exists "ideas_mandar"   on public.ideas;
+drop policy if exists "ideas_admin"    on public.ideas;
+create policy "ideas_leer"   on public.ideas for select to authenticated using (public.es_admin() or perfil_id = auth.uid());
+create policy "ideas_mandar" on public.ideas for insert to authenticated with check (public.es_miembro() and perfil_id = auth.uid());
+create policy "ideas_admin"  on public.ideas for update to authenticated using (public.es_admin()) with check (public.es_admin());
+grant select, insert, update on public.ideas to authenticated;

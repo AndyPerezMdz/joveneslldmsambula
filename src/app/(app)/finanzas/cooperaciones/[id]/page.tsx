@@ -9,6 +9,7 @@ import { enEquipo, SELECT_MOV, type Cooperacion, type Movimiento } from "@/lib/t
 import { ui } from "@/lib/ui";
 import { cambiarExclusion, cerrarCooperacion, incluirTardios, registrarPago } from "../../actions";
 import { MovimientoFila } from "../../MovimientoFila";
+import { AvisosPorConfirmar, cargarAvisos } from "../../../participar/AvisosPorConfirmar";
 
 export const metadata = { title: "Cooperación" };
 
@@ -27,6 +28,7 @@ export default async function DetalleCooperacion({ params }: { params: Promise<{
   // Llegaron después de abierta la cooperación: no aplica hasta que finanzas diga
   const tardios = new Set(((aut ?? []) as { joven_id: string }[]).map((x) => x.joven_id));
   if (!c) notFound();
+  const avisos = await cargarAvisos(supabase, id);
 
   const monto = Number(c.monto);
   const filas = ((e ?? []) as Estado[]).map((x) => ({ ...x, aportado: Number(x.aportado) }));
@@ -51,6 +53,7 @@ export default async function DetalleCooperacion({ params }: { params: Promise<{
 
       <div className="grid items-start gap-5 lg:grid-cols-3">
       <div className="space-y-5 lg:sticky lg:top-8">
+      <AvisosPorConfirmar avisos={avisos} conCooperacion={false} />
       <div className={`${ui.card} space-y-3`}>
         <div className="flex items-end justify-between gap-3">
           <div>

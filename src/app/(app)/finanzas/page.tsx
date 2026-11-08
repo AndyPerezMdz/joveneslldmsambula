@@ -7,6 +7,7 @@ import { requerir } from "@/lib/supabase/server";
 import { enEquipo, SELECT_MOV, type Movimiento } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 import { EncabezadoMovimientos, MovimientoFila } from "./MovimientoFila";
+import { AvisosPorConfirmar, cargarAvisos } from "../participar/AvisosPorConfirmar";
 
 export const metadata = { title: "Finanzas" };
 
@@ -29,6 +30,7 @@ export default async function Finanzas({ searchParams }: { searchParams: Promise
     supabase.from("cortes").select("hasta").order("hasta", { ascending: false }).limit(1).maybeSingle<{ hasta: string }>(),
   ]);
   const cerradoHasta = corte?.hasta ?? "";
+  const avisos = await cargarAvisos(supabase);
   const lista = (movs ?? []) as Movimiento[];
   const titulos = new Map((acts ?? []).map((a: { id: string; titulo: string }) => [a.id, a.titulo]));
   const nombres = new Map((cats ?? []).map((c: { id: string; nombre: string }) => [c.id, c.nombre]));
@@ -124,6 +126,7 @@ export default async function Finanzas({ searchParams }: { searchParams: Promise
 
         {/* Lado derecho */}
         <div className="space-y-5">
+          <AvisosPorConfirmar avisos={avisos} />
           <Tarjeta titulo="Por categoría" accion="Reporte" href={`/reportes?mes=${mes}`}>
             {catsMes.length === 0 ? (
               <p className="text-sm text-stone-500">Nada este mes.</p>
