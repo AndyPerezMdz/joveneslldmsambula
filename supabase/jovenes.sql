@@ -79,7 +79,8 @@ create index if not exists asistencias_joven on public.asistencias (joven_id);
 create table if not exists public.correos_admin (
   email text primary key check (email = lower(email))
 );
-insert into public.correos_admin (email) values ('aperezmdz21@gmail.com') on conflict do nothing;
+-- (Ya no se mete ningún correo fijo: los roles se cambian en Equipo y se respetan)
+delete from public.correos_admin where email = 'aperezmdz21@gmail.com';
 
 -- ============================================================
 -- 3. Helpers de permisos (security definer para evitar recursión RLS)
@@ -1381,3 +1382,14 @@ create policy "ideas_leer"   on public.ideas for select to authenticated using (
 create policy "ideas_mandar" on public.ideas for insert to authenticated with check (public.es_miembro() and perfil_id = auth.uid());
 create policy "ideas_admin"  on public.ideas for update to authenticated using (public.es_admin()) with check (public.es_admin());
 grant select, insert, update on public.ideas to authenticated;
+
+-- ============================================================
+-- 18. SALDO INICIAL
+--   Lo que finanzas ya tenía juntado antes de usar la app. Es una entrada normal
+--   (se anula como cualquiera), pero solo puede haber UNA vigente.
+-- ============================================================
+insert into public.categorias (id, nombre, tipo, activa, orden)
+values ('saldo-inicial', 'Saldo inicial', 'entrada', false, 0)   -- inactiva: no sale al registrar normal
+on conflict (id) do nothing;
+create unique index if not exists movimientos_un_saldo_inicial
+  on public.movimientos (categoria) where categoria = 'saldo-inicial' and not anulado;

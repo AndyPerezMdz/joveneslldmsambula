@@ -121,6 +121,25 @@ export async function incluirTardios(_p: Resultado, fd: FormData): Promise<Resul
   }, "Incluidos.");
 }
 
+// ---------- Saldo inicial ----------
+/** Lo que ya tenían juntado antes de la app. Solo uno (si se equivocan, se anula y se pone otro). */
+export async function registrarSaldoInicial(_p: Resultado, fd: FormData): Promise<Resultado> {
+  return intentar(async () => {
+    const { supabase } = await clienteCon(finanzas);
+    const monto = leerMonto(txt(fd, "monto"));
+    const fecha = txt(fd, "fecha");
+    if (!monto) throw new Error("Escribe cuánto tenían juntado.");
+    if (!fechaOk(fecha)) throw new Error("Elige la fecha.");
+    const { error } = await supabase.from("movimientos").insert({
+      tipo: "entrada", categoria: "saldo-inicial", monto, fecha,
+      concepto: opt(fd, "concepto") ?? "Saldo inicial (lo que ya estaba juntado)",
+    });
+    if (error?.code === "23505") throw new Error("Ya hay un saldo inicial. Si está mal, anúlalo y pon el bueno.");
+    ok(error);
+    revalidatePath("/", "layout");
+  }, "Saldo inicial registrado.");
+}
+
 // ---------- Cortes de caja ----------
 export async function hacerCorte(_p: Resultado, fd: FormData): Promise<Resultado> {
   return intentar(async () => {

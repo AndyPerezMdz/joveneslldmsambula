@@ -2,11 +2,14 @@ import Link from "next/link";
 import { IcTicket } from "@/components/Iconos";
 import { Encabezado, Tarjeta } from "@/components/Tarjeta";
 import { pesos } from "@/lib/dinero";
-import { hoy, mesVecino, nombreMes } from "@/lib/fechas";
+import { hoy, mesVecino, nombreMes, sumarDias } from "@/lib/fechas";
 import { requerir } from "@/lib/supabase/server";
 import { enEquipo, SELECT_MOV, type Movimiento } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 import { EncabezadoMovimientos, MovimientoFila } from "./MovimientoFila";
+import { Formulario } from "@/components/Formulario";
+import { Submit } from "@/components/Submit";
+import { registrarSaldoInicial } from "./actions";
 import { AvisosPorConfirmar, cargarAvisos } from "../participar/AvisosPorConfirmar";
 
 export const metadata = { title: "Finanzas" };
@@ -30,7 +33,13 @@ export default async function Finanzas({ searchParams }: { searchParams: Promise
     supabase.from("cortes").select("hasta").order("hasta", { ascending: false }).limit(1).maybeSingle<{ hasta: string }>(),
   ]);
   const cerradoHasta = corte?.hasta ?? "";
-  const avisos = await cargarAvisos(supabase);
+  const [avisos, { data: inicial }, { data: primero }] = await Promise.all([
+    cargarAvisos(supabase),
+    supabase.from("movimientos").select("id").eq("categoria", "saldo-inicial").eq("anulado", false).limit(1).maybeSingle(),
+    supabase.from("movimientos").select("fecha").order("fecha").limit(1).maybeSingle<{ fecha: string }>(),
+  ]);
+  // Fecha sugerida del saldo inicial: el día del primer movimiento (para que quede antes de todo)
+  const fechaInicial = [primero?.fecha ?? hoy(), cerradoHasta ? sumarDias(cerradoHasta, 1) : ""].sort().at(-1)!;
   const lista = (movs ?? []) as Movimiento[];
   const titulos = new Map((acts ?? []).map((a: { id: string; titulo: string }) => [a.id, a.titulo]));
   const nombres = new Map((cats ?? []).map((c: { id: string; nombre: string }) => [c.id, c.nombre]));
@@ -126,6 +135,27 @@ export default async function Finanzas({ searchParams }: { searchParams: Promise
 
         {/* Lado derecho */}
         <div className="space-y-5">
+          {!inicial && (
+            <Tarjeta titulo="¿Ya tenían dinero juntado?" tono="oro">
+              <p className="-mt-2 mb-3 text-sm text-titulo/80">
+                Ponlo como saldo inicial y la app empieza a contar desde ahí. Solo se pone una vez.
+              </p>
+              <Formulario action={registrarSaldoInicial} className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <label className={ui.label}>¿Cuánto?
+                    <input name="monto" inputMode="decimal" required placeholder="$0.00" className={`${ui.input} h-10 tabular-nums`} />
+                  </label>
+                  <label className={ui.label}>Al día
+                    <input name="fecha" type="date" required defaultValue={fechaInicial} min={cerradoHasta ? sumarDias(cerradoHasta, 1) : undefined} className={`${ui.input} h-10`} />
+                  </label>
+                </div>
+                <input name="concepto" placeholder="Nota (opcional): ej. Lo de la caja hasta octubre" className={`${ui.input} mt-0 h-10`} />
+                <div className="flex justify-end">
+                  <Submit variante="btnOro" confirmar="¿Registrar el saldo inicial? Cuenta como una entrada. Si te equivocas, se anula y se pone otro.">Agregar saldo inicial</Submit>
+                </div>
+              </Formulario>
+            </Tarjeta>
+          )}
           <AvisosPorConfirmar avisos={avisos} />
           <Tarjeta titulo="Por categoría" accion="Reporte" href={`/reportes?mes=${mes}`}>
             {catsMes.length === 0 ? (
