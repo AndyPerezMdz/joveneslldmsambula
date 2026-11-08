@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { leerMonto } from "@/lib/dinero";
 import { driveListo, subirTicket } from "@/lib/drive";
 import { bool, clienteCon, intentar, ok, opt, txt, type Resultado } from "@/lib/forms";
-import { claveCategoria, enEquipo, type Perfil, type TipoMov } from "@/lib/tipos";
+import { claveCategoria, enEquipo, esAdmin, type Perfil, type TipoMov } from "@/lib/tipos";
 
 const finanzas = (p: Perfil) => enEquipo(p, "finanzas");
 const fechaOk = (f: string) => /^\d{4}-\d{2}-\d{2}$/.test(f);
@@ -109,6 +109,35 @@ export async function cambiarExclusion(_p: Resultado, fd: FormData): Promise<Res
     ok((await q).error);
     revalidatePath("/", "layout");
   });
+}
+
+/** Los que llegaron después de abierta la cooperación: ahora sí les toca. */
+export async function incluirTardios(_p: Resultado, fd: FormData): Promise<Resultado> {
+  return intentar(async () => {
+    const { supabase } = await clienteCon(finanzas);
+    ok((await supabase.from("cooperacion_excluidos").delete()
+      .eq("cooperacion_id", txt(fd, "cooperacion_id")).eq("automatica", true)).error);
+    revalidatePath("/", "layout");
+  }, "Incluidos.");
+}
+
+// ---------- Cortes de caja ----------
+export async function hacerCorte(_p: Resultado, fd: FormData): Promise<Resultado> {
+  return intentar(async () => {
+    const { supabase } = await clienteCon(finanzas);
+    const hasta = txt(fd, "hasta");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(hasta)) throw new Error("Elige hasta qué día es el corte.");
+    ok((await supabase.rpc("hacer_corte", { p_hasta: hasta, p_notas: opt(fd, "notas") })).error);
+    revalidatePath("/", "layout");
+  }, "Corte hecho. Lo de antes de esa fecha ya no se mueve.");
+}
+
+export async function deshacerCorte(_p: Resultado, fd: FormData): Promise<Resultado> {
+  return intentar(async () => {
+    const { supabase } = await clienteCon(esAdmin);
+    ok((await supabase.rpc("deshacer_corte", { p_id: txt(fd, "id") })).error);
+    revalidatePath("/", "layout");
+  }, "Corte deshecho.");
 }
 
 export async function cerrarCooperacion(_p: Resultado, fd: FormData): Promise<Resultado> {

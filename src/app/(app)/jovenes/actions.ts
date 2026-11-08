@@ -48,3 +48,15 @@ export async function fusionarJoven(_p: Resultado, fd: FormData): Promise<Result
     revalidatePath("/", "layout");
   }, "Fichas juntadas.");
 }
+
+/** El aviso de "se parecen" estaba mal: son dos personas distintas. */
+export async function sonDistintas(_p: Resultado, fd: FormData): Promise<Resultado> {
+  return intentar(async () => {
+    const { supabase } = await clienteCon(permiso);
+    const [a, b] = [txt(fd, "a"), txt(fd, "b")].sort();
+    if (!a || !b || a === b) throw new Error("Faltan las dos fichas.");
+    const { error } = await supabase.from("fichas_distintas").insert({ a, b });
+    if (error && error.code !== "23505") ok(error);
+    revalidatePath("/", "layout");
+  }, "Listo, ya no se avisa de esas dos.");
+}

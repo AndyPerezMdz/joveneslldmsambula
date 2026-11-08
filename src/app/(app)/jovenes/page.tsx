@@ -3,30 +3,33 @@ import { Formulario } from "@/components/Formulario";
 import { IcSubir } from "@/components/Iconos";
 import { Submit } from "@/components/Submit";
 import { Encabezado, Indicador } from "@/components/Tarjeta";
-import { haceCuanto, hoy, semanasEntre } from "@/lib/fechas";
+import { haceCuanto, hoy } from "@/lib/fechas";
 import { normalizar } from "@/lib/nombres";
 import { requerir } from "@/lib/supabase/server";
-import { enEquipo, SEMANAS_ALERTA, type ResumenJoven } from "@/lib/tipos";
+import { enEquipo, hayQueBuscar, SEMANAS_ALERTA, type ResumenJoven } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
-import { actualizarJoven, borrarJoven, crearJoven, fusionarJoven } from "./actions";
+import { actualizarJoven, borrarJoven, crearJoven, fusionarJoven, sonDistintas } from "./actions";
 
 export const metadata = { title: "Jóvenes" };
 
 type Ficha = { id: string; email: string | null; telefono: string | null; perfil_id: string | null };
+type Repetido = { a: string; nombre_a: string; cuenta_a: boolean; b: string; nombre_b: string; cuenta_b: boolean };
 
 export default async function Jovenes({ searchParams }: { searchParams: Promise<{ q?: string; ver?: string }> }) {
   const { supabase } = await requerir((p) => enEquipo(p, "asistencia"));
   const { q = "", ver = "activos" } = await searchParams;
   const h = hoy();
 
-  const [{ data: r }, { data: f }] = await Promise.all([
+  const [{ data: r }, { data: f }, { data: rep }] = await Promise.all([
     supabase.rpc("resumen_jovenes", { p_semanas: 8 }),
     supabase.from("jovenes").select("id, email, telefono, perfil_id"),
+    supabase.rpc("posibles_repetidos"),
   ]);
+  const repetidos = (rep ?? []) as Repetido[];
   const fichas = new Map(((f ?? []) as Ficha[]).map((x) => [x.id, x]));
   const todos = ((r ?? []) as ResumenJoven[]).sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
   const activos = todos.filter((j) => j.activo);
-  const sinVenir = activos.filter((j) => j.ultima && semanasEntre(j.ultima, h) >= SEMANAS_ALERTA);
+  const sinVenir = activos.filter(hayQueBuscar);
   const conCuenta = todos.filter((j) => fichas.get(j.joven_id)?.perfil_id).length;
 
   const base = ver === "inactivos" ? todos.filter((j) => !j.activo) : ver === "sin-venir" ? sinVenir : activos;
@@ -49,6 +52,40 @@ export default async function Jovenes({ searchParams }: { searchParams: Promise<
         <Indicador etiqueta="Sin venir" valor={String(sinVenir.length)} color={sinVenir.length ? "text-red-700" : "text-titulo"} detalle={`${SEMANAS_ALERTA}+ semanas`} />
         <Indicador etiqueta="Con cuenta" valor={String(conCuenta)} />
       </div>
+
+      {repetidos.length > 0 && (
+        <section id="repetidos" className="mb-5 scroll-mt-24 rounded-3xl border border-oro/40 bg-oro-suave p-5">
+          <h2 className="text-[15px] font-semibold text-titulo">Fichas que se parecen ({repetidos.length})</h2>
+          <p className="mb-3 text-sm text-titulo/70">
+            Puede que sea la misma persona dos veces. Si lo es, júntalas: se queda el nombre que elijas, con la asistencia y los pagos de las dos.
+          </p>
+          <ul className="space-y-2">
+            {repetidos.map((x) => (
+              <li key={`${x.a}-${x.b}`} className="flex flex-wrap items-center gap-2 rounded-2xl bg-superficie p-3 text-sm">
+                <span className="min-w-0 flex-1 font-medium">
+                  {x.nombre_a}{x.cuenta_a && <span className="ml-1 text-xs text-stone-400">(cuenta)</span>}
+                  <span className="mx-2 text-stone-400">↔</span>
+                  {x.nombre_b}{x.cuenta_b && <span className="ml-1 text-xs text-stone-400">(cuenta)</span>}
+                </span>
+                {[{ queda: x.a, va: x.b, n: x.nombre_a }, { queda: x.b, va: x.a, n: x.nombre_b }].map((o) => (
+                  <Formulario key={o.queda} action={fusionarJoven}>
+                    <input type="hidden" name="id" value={o.queda} />
+                    <input type="hidden" name="origen" value={o.va} />
+                    <Submit variante="btnMini" confirmar={`¿Juntar las dos fichas como "${o.n}"? Se queda ese nombre con la asistencia y los pagos de las dos. La otra desaparece.`}>
+                      Juntar como “{o.n.split(" ").slice(0, 2).join(" ")}”
+                    </Submit>
+                  </Formulario>
+                ))}
+                <Formulario action={sonDistintas} silencioso>
+                  <input type="hidden" name="a" value={x.a} />
+                  <input type="hidden" name="b" value={x.b} />
+                  <Submit variante="btnMini">No son la misma</Submit>
+                </Formulario>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-3 lg:col-span-2">
@@ -75,8 +112,7 @@ export default async function Jovenes({ searchParams }: { searchParams: Promise<
             <ul className="divide-y divide-stone-200/70">
               {lista.map((j) => {
                 const x = fichas.get(j.joven_id);
-                const semanas = j.ultima ? semanasEntre(j.ultima, h) : null;
-                const alerta = j.activo && semanas !== null && semanas >= SEMANAS_ALERTA;
+                const alerta = hayQueBuscar(j);
                 return (
                   <li key={j.joven_id}>
                     <details className="group">

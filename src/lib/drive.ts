@@ -22,6 +22,10 @@ export const driveListo = () =>
 
 const raiz = () => process.env.DRIVE_CARPETA_ID!;
 
+/** Carpeta compartida donde el equipo sube las fotos (se puede cambiar con DRIVE_ENLACE_SUBIR). */
+export const ENLACE_SUBIR_FOTOS =
+  process.env.DRIVE_ENLACE_SUBIR || "https://drive.google.com/drive/folders/1Jvh2LyaAiv5lRojTSCjbU9-RhbiR77n7?usp=sharing";
+
 // ---------- Token (se renueva solo, dura ~1 hora) ----------
 let token: { valor: string; vence: number } | null = null;
 
@@ -132,11 +136,26 @@ async function leerFotos(): Promise<Foto[]> {
 export const fotosDrive = unstable_cache(leerFotos, ["fotos-drive"], { revalidate: 300, tags: ["fotos"] });
 
 // ---------- Fotos ↔ actividades ----------
-type ActividadMin = { id: string; fecha: string; hora: string | null };
+type ActividadMin = { id: string; fecha: string; hora: string | null; hora_fin?: string | null };
+
+const minutos = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+/** Margen: media hora antes de empezar; hasta una hora después de terminar (o 3 h si no dice cuándo termina). */
+const ANTES = 30, DESPUES = 60, DURACION = 180;
+
+/** ¿La foto cae en el horario de la actividad? */
+function cabe(a: ActividadMin, f: Foto, delDia: number): boolean {
+  if (!a.hora) return true;                       // actividad sin hora: todo el día
+  if (!f.hora) return delDia === 1;               // foto sin hora: solo si ese día hubo una sola
+  const ini = minutos(a.hora) - ANTES;
+  const fin = (a.hora_fin ? minutos(a.hora_fin) : minutos(a.hora) + DURACION) + DESPUES;
+  const m = minutos(f.hora);
+  return m >= ini && m <= fin;
+}
 
 /**
- * Cada foto va a la actividad de su mismo día. Si ese día hubo varias,
- * a la que empezó más cerca (antes) de la hora de la foto.
+ * Cada foto va a la actividad de su día cuyo horario la incluya (si caben en
+ * varias, a la que empezó más tarde antes de la foto). Las que no caen en
+ * ningún horario quedan "sin asignar": nada de pegarlas a la más cercana.
  */
 export function repartir<A extends ActividadMin>(fotos: Foto[], actividades: A[]) {
   const porDia = new Map<string, A[]>();
@@ -144,13 +163,11 @@ export function repartir<A extends ActividadMin>(fotos: Foto[], actividades: A[]
   const album = new Map<string, Foto[]>();
   const sueltas: Foto[] = [];
   for (const f of fotos) {
-    const delDia = porDia.get(f.fecha);
-    if (!delDia?.length) { sueltas.push(f); continue; }
-    let elegida = delDia[0];
-    if (delDia.length > 1 && f.hora) {
-      const conHora = delDia.filter((a) => a.hora).sort((a, b) => a.hora!.localeCompare(b.hora!));
-      elegida = conHora.filter((a) => a.hora!.slice(0, 5) <= f.hora!).at(-1) ?? conHora[0] ?? delDia[0];
-    }
+    const delDia = porDia.get(f.fecha) ?? [];
+    const caben = delDia.filter((a) => cabe(a, f, delDia.length));
+    if (!caben.length) { sueltas.push(f); continue; }
+    const conHora = caben.filter((a) => a.hora).sort((a, b) => a.hora!.localeCompare(b.hora!));
+    const elegida = (f.hora ? conHora.filter((a) => a.hora!.slice(0, 5) <= f.hora!).at(-1) : undefined) ?? conHora[0] ?? caben[0];
     album.set(elegida.id, [...(album.get(elegida.id) ?? []), f]);
   }
   return { album, sueltas };

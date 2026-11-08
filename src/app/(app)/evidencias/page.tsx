@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Album } from "@/components/Album";
-import { driveListo, espacioDrive, fotosDrive, repartir, type Foto } from "@/lib/drive";
+import { driveListo, ENLACE_SUBIR_FOTOS, espacioDrive, fotosDrive, repartir, type Foto } from "@/lib/drive";
 import { fechaLarga, partesFecha } from "@/lib/fechas";
 import { requerir } from "@/lib/supabase/server";
 import { enEquipo, tipo, type Actividad } from "@/lib/tipos";
@@ -12,7 +12,6 @@ const gb = (b: number) => `${(b / 1024 ** 3).toFixed(1)} GB`;
 
 export default async function Evidencias() {
   const { supabase } = await requerir((p) => enEquipo(p, "evidencias"));
-  const sube = true;
 
   if (!driveListo()) {
     return (
@@ -73,12 +72,13 @@ export default async function Evidencias() {
         </div>
       )}
 
-      {sube && (
-        <p className="rounded-2xl bg-oro-suave p-4 text-sm text-titulo">
-          <b>¿Cómo subo fotos?</b> Desde la app de Google Drive, a la carpeta <b>Evidencias</b> del grupo (o una subcarpeta).
-          En unos minutos aparecen aquí, ya acomodadas en su actividad.
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-oro-suave p-4 text-sm text-titulo">
+        <p className="min-w-56 flex-1">
+          <b>¿Cómo subo fotos?</b> Ábrelas en la carpeta del grupo y súbelas ahí (o a una subcarpeta).
+          En unos minutos aparecen aquí, ya acomodadas en su actividad por la fecha y hora en que se tomaron.
         </p>
-      )}
+        <a href={ENLACE_SUBIR_FOTOS} target="_blank" rel="noopener noreferrer" className={ui.btnOro}>Subir fotos al Drive</a>
+      </div>
 
       <div className="grid gap-x-6 gap-y-8 lg:grid-cols-2">
       {conFotos.map((a) => {
@@ -102,8 +102,10 @@ export default async function Evidencias() {
       {dias.length > 0 && (
         <section className="space-y-5">
           <div>
-            <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-oro">Sin actividad</h2>
-            <p className={ui.ayuda}>Fotos de días en que no hay actividad registrada. Si fue una, créala con esa fecha y se acomodan solas.</p>
+            <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-oro">Sin asignar ({sueltas.length})</h2>
+            <p className={ui.ayuda}>
+              Fotos que no caen en el horario de ninguna actividad. Si fueron de una, créala (o corrígele la hora) y se acomodan solas.
+            </p>
           </div>
           {dias.map((d) => (
             <div key={d} className="space-y-2">

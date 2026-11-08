@@ -6,10 +6,10 @@ import { TarjetaActividad } from "@/components/TarjetaActividad";
 import { pesos } from "@/lib/dinero";
 import { driveListo, espacioDrive, fotosDrive, type Foto } from "@/lib/drive";
 import { asegurarDias } from "@/lib/calendario";
-import { fechaLarga, haceCuanto, horaAhora, hoy, semanasEntre, sumarDias } from "@/lib/fechas";
+import { fechaLarga, haceCuanto, horaAhora, hoy, sumarDias } from "@/lib/fechas";
 import { asistenciaEntre, lunes } from "@/lib/resumen";
 import { requerirMiembro } from "@/lib/supabase/server";
-import { enEquipo, puedeOrganizar, SEMANAS_ALERTA, type Actividad, type ResumenJoven } from "@/lib/tipos";
+import { enEquipo, hayQueBuscar, puedeOrganizar, SEMANAS_ALERTA, type Actividad, type ResumenJoven } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 
 export const metadata = { title: "Inicio" };
@@ -45,18 +45,21 @@ export default async function Inicio() {
   // Asistencia (equipo de asistencia / encargados)
   let resumen: ResumenJoven[] = [];
   let asis: Awaited<ReturnType<typeof asistenciaEntre>> | null = null;
+  let repetidos = 0;
   if (veLista) {
-    const [{ data: r }, a] = await Promise.all([
+    const [{ data: r }, a, { data: rep }] = await Promise.all([
       supabase.rpc("resumen_jovenes", { p_semanas: 8 }),
       asistenciaEntre(supabase, sumarDias(lunes(h), -49), h),
+      supabase.rpc("posibles_repetidos"),
     ]);
     resumen = (r ?? []) as ResumenJoven[];
     asis = a;
+    repetidos = (rep ?? []).length;
   }
   const activos = resumen.filter((j) => j.activo);
   const perdidos = activos
-    .filter((j) => j.ultima && semanasEntre(j.ultima, h) >= SEMANAS_ALERTA)
-    .sort((a, b) => (a.ultima! < b.ultima! ? -1 : 1));
+    .filter(hayQueBuscar)
+    .sort((a, b) => b.semanas_falta - a.semanas_falta || (a.ultima! < b.ultima! ? -1 : 1));
 
   // Mi propia asistencia (joven con cuenta ligada)
   const yo = !veLista && ficha
@@ -174,14 +177,22 @@ export default async function Inicio() {
             </Tarjeta>
           )}
 
+          {repetidos > 0 && (
+            <Tarjeta titulo={`Fichas que se parecen (${repetidos})`} tono="oro" accion="Revisar" href="/jovenes#repetidos">
+              <p className="text-sm text-titulo/80">
+                Puede que alguien esté dos veces en la lista. Júntalas para que su asistencia no se divida.
+              </p>
+            </Tarjeta>
+          )}
+
           {perdidos.length > 0 && (
             <Tarjeta titulo={`Hay que buscarlos (${perdidos.length})`} tono="alerta">
-              <p className="-mt-2 mb-2 text-xs text-red-700">{SEMANAS_ALERTA} semanas o más sin venir</p>
+              <p className="-mt-2 mb-2 text-xs text-red-700">{SEMANAS_ALERTA} semanas o más con culto sin venir</p>
               <ul className="divide-y divide-red-200">
                 {perdidos.slice(0, 8).map((j) => (
                   <li key={j.joven_id} className="flex items-center justify-between gap-3 py-2 text-sm">
                     <span className="truncate font-medium text-red-900">{j.nombre}</span>
-                    <span className="shrink-0 text-xs text-red-700">{haceCuanto(j.ultima!, h)}</span>
+                    <span className="shrink-0 text-xs text-red-700">{j.semanas_falta} semanas · {haceCuanto(j.ultima!, h)}</span>
                   </li>
                 ))}
               </ul>

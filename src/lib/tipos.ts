@@ -33,6 +33,8 @@ export type ResumenJoven = {
   recientes: number;
   total: number;
   ultima: string | null;
+  /** Semanas con culto (con lista pasada) desde su última vez o desde que entró */
+  semanas_falta: number;
 };
 
 export const ROLES: { v: RolApp; n: string }[] = [
@@ -58,6 +60,25 @@ export const tipo = (v: TipoActividad) => TIPOS.find((t) => t.v === v) ?? TIPOS[
 
 /** Semanas sin venir a partir de las cuales hay que buscar a alguien */
 export const SEMANAS_ALERTA = 3;
+/** "Hay que buscarlo": activo, ya había venido y lleva SEMANAS_ALERTA semanas de culto sin venir. */
+export const hayQueBuscar = (j: ResumenJoven) => j.activo && !!j.ultima && j.semanas_falta >= SEMANAS_ALERTA;
+
+/** Días después de la actividad en que todavía se puede corregir la lista (igual que en la base). */
+export const DIAS_LISTA = 3;
+/**
+ * ¿Se puede pasar lista? null = sí; si no, el porqué.
+ * `todo` = encargado de asistencia (o admin): puede cambiar listas ya cerradas.
+ */
+export function bloqueoLista(a: { fecha: string; cancelada?: boolean | null }, hoy: string, todo: boolean): string | null {
+  if (a.fecha > hoy) return "Todavía no es el día: la lista se pasa el día de la actividad.";
+  if (a.cancelada) return "Esta actividad está cancelada: no se pasa lista.";
+  const limite = new Date(`${hoy}T12:00:00Z`);
+  limite.setUTCDate(limite.getUTCDate() - DIAS_LISTA);
+  if (!todo && a.fecha < limite.toISOString().slice(0, 10)) {
+    return `Esta lista ya se cerró (pasaron más de ${DIAS_LISTA} días). Solo el encargado de asistencia la puede cambiar.`;
+  }
+  return null;
+}
 
 type P = (Pick<Perfil, "rol" | "equipos"> & { lider_de?: Equipo[] }) | null | undefined;
 export const esAdmin = (p: P) => p?.rol === "admin";

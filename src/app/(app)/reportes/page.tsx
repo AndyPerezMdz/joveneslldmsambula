@@ -2,9 +2,9 @@ import Link from "next/link";
 import { Encabezado } from "@/components/Tarjeta";
 import { pesos } from "@/lib/dinero";
 import { driveListo, fotosDrive, repartir, type Foto } from "@/lib/drive";
-import { haceCuanto, hoy, mesVecino, nombreMes, partesFecha, semanasEntre } from "@/lib/fechas";
+import { haceCuanto, hoy, mesVecino, nombreMes, partesFecha } from "@/lib/fechas";
 import { requerir } from "@/lib/supabase/server";
-import { enEquipo, esEncargado, SEMANAS_ALERTA, tipo, type Actividad, type Movimiento, type ResumenJoven, SELECT_MOV } from "@/lib/tipos";
+import { enEquipo, esEncargado, hayQueBuscar, tipo, type Actividad, type Movimiento, type ResumenJoven, SELECT_MOV } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 import { BotonImprimir } from "./BotonImprimir";
 
@@ -64,7 +64,7 @@ export default async function Reportes({ searchParams }: { searchParams: Promise
     distintos = veces.size;
     constantes = [...veces.values()].sort((a, b) => b.veces - a.veces || a.nombre.localeCompare(b.nombre, "es")).slice(0, 10);
     if (mes === actual) {
-      perdidos = ((r ?? []) as ResumenJoven[]).filter((j) => j.activo && j.ultima && semanasEntre(j.ultima, h) >= SEMANAS_ALERTA);
+      perdidos = ((r ?? []) as ResumenJoven[]).filter(hayQueBuscar);
     }
   } else {
     const { data: a } = await supabase.from("actividades").select("id, titulo, tipo, fecha, hora, hora_fin, lugar, notas, horario_id, cancelada").eq("cancelada", false).gte("fecha", ini).lt("fecha", fin).order("fecha");

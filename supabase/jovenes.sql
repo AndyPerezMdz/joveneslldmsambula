@@ -183,6 +183,8 @@ grant select, insert, update, delete on
 -- total:     cuántas veces ha venido en total
 -- ultima:    fecha de la última actividad a la que vino
 -- (security invoker: respeta el RLS de quien la llama)
+-- (Se borra primero: en la sección 15 cambia lo que regresa y no se puede "reemplazar" encima)
+drop function if exists public.resumen_jovenes(int);
 create or replace function public.resumen_jovenes(p_semanas int default 8)
 returns table (joven_id uuid, nombre text, activo boolean, recientes int, total int, ultima date)
 language sql stable security invoker set search_path = public as $$
@@ -976,3 +978,244 @@ begin
 end $$;
 revoke all on function public.borrar_mi_cuenta() from public;
 grant execute on function public.borrar_mi_cuenta() to authenticated;
+
+-- ============================================================
+-- 15. CANDADOS Y AVISOS
+--   · Asistencia: no se pasa lista en actividades futuras ni canceladas; pasados
+--     3 días, solo el encargado de asistencia la puede cambiar.
+--   · "Hay que buscarlos" cuenta semanas con culto (con lista pasada) desde que entró.
+--   · Fichas que se parecen → aviso al equipo de asistencia para juntarlas.
+--   · Quien llega después de abierta una cooperación no queda debiendo: finanzas decide.
+--   · Cortes de caja: lo que queda antes de un corte ya no se toca.
+-- ============================================================
+
+-- ---------- Fusionar: igual que antes, pero el permiso especial va primero ----------
+-- (para que la asistencia vieja pase aunque la lista ya esté cerrada) y las
+-- exclusiones automáticas de cooperaciones no se heredan.
+alter table public.cooperacion_excluidos add column if not exists automatica boolean not null default false;
+
+create or replace function public.fusionar_jovenes(p_origen uuid, p_destino uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare o public.jovenes; d public.jovenes;
+begin
+  if not public.en_equipo('asistencia') then raise exception 'No tienes permiso para hacer eso.'; end if;
+  if p_origen = p_destino then raise exception 'Elige a otra persona.'; end if;
+  select * into o from public.jovenes where id = p_origen;
+  select * into d from public.jovenes where id = p_destino;
+  if o.id is null or d.id is null then raise exception 'No se encontró a uno de los dos.'; end if;
+  if o.perfil_id is not null and d.perfil_id is not null then
+    raise exception 'Los dos tienen cuenta: no se pueden juntar.';
+  end if;
+
+  perform set_config('jovenes.fusion', 'si', true);   -- deja pasar los candados
+
+  insert into public.asistencias (actividad_id, joven_id, marcado_por, created_at)
+  select actividad_id, p_destino, marcado_por, created_at from public.asistencias where joven_id = p_origen
+  on conflict do nothing;
+  insert into public.cooperacion_excluidos (cooperacion_id, joven_id)
+  select cooperacion_id, p_destino from public.cooperacion_excluidos where joven_id = p_origen and not automatica
+  on conflict do nothing;
+  update public.movimientos set joven_id = p_destino where joven_id = p_origen;
+
+  update public.jovenes set perfil_id = null where id = p_origen;
+  update public.jovenes set
+    perfil_id = coalesce(d.perfil_id, o.perfil_id),
+    email     = coalesce(d.email, o.email),
+    telefono  = coalesce(d.telefono, o.telefono),
+    activo    = d.activo or o.activo
+  where id = p_destino;
+  delete from public.jovenes where id = p_origen;
+end $$;
+grant execute on function public.fusionar_jovenes(uuid, uuid) to authenticated;
+
+-- ---------- Candado de asistencia ----------
+create or replace function public.candado_asistencia()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  r public.asistencias := coalesce(new, old);
+  a record;
+begin
+  if current_setting('jovenes.fusion', true) = 'si' then return r; end if;
+  select fecha, cancelada into a from public.actividades where id = r.actividad_id;
+  if not found then return r; end if;                                              -- se está borrando la actividad
+  if not exists (select 1 from public.jovenes where id = r.joven_id) then return r; end if;   -- se está borrando la ficha
+  if a.fecha > public.hoy() then
+    raise exception 'Todavía no es el día: la lista se pasa el día de la actividad.';
+  end if;
+  if a.cancelada then
+    raise exception 'Esta actividad está cancelada: no se pasa lista.';
+  end if;
+  if a.fecha < public.hoy() - 3 and not (public.es_encargado() or public.es_lider('asistencia')) then
+    raise exception 'Esta lista ya se cerró (pasaron más de 3 días). Solo el encargado de asistencia la puede cambiar.';
+  end if;
+  return r;
+end $$;
+drop trigger if exists asistencias_candado on public.asistencias;
+create trigger asistencias_candado before insert or update or delete on public.asistencias
+  for each row execute function public.candado_asistencia();
+
+-- ---------- Semanas sin venir (las que cuentan) ----------
+-- Semanas en que hubo culto (no cancelado y con lista pasada) después de su última
+-- asistencia y desde que entró al grupo. Vacaciones o semanas sin lista no cuentan.
+create or replace function public.semanas_sin_venir(p_joven uuid)
+returns int language sql stable security definer set search_path = public as $$
+  select case when public.en_equipo('asistencia') or p_joven = public.mi_joven_id() then (
+    select count(distinct date_trunc('week', act.fecha))::int
+      from public.jovenes j
+      join public.actividades act
+        on act.tipo = 'culto' and not act.cancelada and act.fecha <= public.hoy()
+       and act.fecha >= (j.created_at at time zone 'America/Merida')::date
+       and act.fecha > coalesce((
+             select max(a2.fecha) from public.asistencias s
+               join public.actividades a2 on a2.id = s.actividad_id
+              where s.joven_id = j.id and not a2.cancelada), '-infinity'::date)
+     where j.id = p_joven
+       and exists (select 1 from public.asistencias s where s.actividad_id = act.id)
+  ) end
+$$;
+revoke all on function public.semanas_sin_venir(uuid) from public;
+grant execute on function public.semanas_sin_venir(uuid) to authenticated;
+
+drop function if exists public.resumen_jovenes(int);
+create function public.resumen_jovenes(p_semanas int default 8)
+returns table (joven_id uuid, nombre text, activo boolean, recientes int, total int, ultima date, semanas_falta int)
+language sql stable security invoker set search_path = public as $$
+  select j.id, j.nombre, j.activo,
+         count(act.id) filter (where act.fecha >= public.hoy() - p_semanas * 7)::int,
+         count(act.id)::int,
+         max(act.fecha),
+         coalesce(public.semanas_sin_venir(j.id), 0)
+    from public.jovenes j
+    left join public.asistencias a on a.joven_id = j.id
+    left join public.actividades act on act.id = a.actividad_id and act.fecha <= public.hoy() and not act.cancelada
+   where not exists (select 1 from public.perfiles p where p.id = j.perfil_id and p.rol = 'admin')
+   group by j.id, j.nombre, j.activo
+$$;
+grant execute on function public.resumen_jovenes(int) to authenticated;
+
+-- ---------- Fichas que se parecen ----------
+-- "Juan López" y "Juan Carlos López Pérez" → posible repetido.
+-- Si el encargado dice que son distintas, ya no se vuelve a avisar.
+create table if not exists public.fichas_distintas (
+  a uuid not null references public.jovenes (id) on delete cascade,
+  b uuid not null references public.jovenes (id) on delete cascade,
+  primary key (a, b),
+  check (a < b)
+);
+alter table public.fichas_distintas enable row level security;
+drop policy if exists "distintas_asistencia" on public.fichas_distintas;
+create policy "distintas_asistencia" on public.fichas_distintas for all to authenticated
+  using (public.en_equipo('asistencia')) with check (public.en_equipo('asistencia'));
+grant select, insert, delete on public.fichas_distintas to authenticated;
+
+create or replace function public.palabras_nombre(t text)
+returns text[] language sql immutable as $$
+  select array(
+    select w from unnest(string_to_array(public.normalizar_nombre(regexp_replace(coalesce(t, ''), '[()]', '', 'g')), ' ')) w
+     where w <> '' and w not in ('de', 'del', 'la', 'las', 'los', 'y', 'e'))
+$$;
+
+create or replace function public.posibles_repetidos()
+returns table (a uuid, nombre_a text, cuenta_a boolean, b uuid, nombre_b text, cuenta_b boolean)
+language sql stable security definer set search_path = public as $$
+  with f as (
+    select id, nombre, perfil_id is not null as cuenta, public.palabras_nombre(nombre) as p
+      from public.jovenes
+     where public.en_equipo('asistencia')
+  )
+  select x.id, x.nombre, x.cuenta, y.id, y.nombre, y.cuenta
+    from f x join f y on x.id < y.id
+   where cardinality(x.p) >= 2 and cardinality(y.p) >= 2
+     and (x.p <@ y.p or y.p <@ x.p                       -- uno trae todas las palabras del otro
+          or (x.p[1] = y.p[1] and x.p[2] = y.p[2]))       -- mismo nombre y primer apellido
+     and not (x.cuenta and y.cuenta)                      -- dos cuentas no se pueden juntar
+     and not exists (select 1 from public.fichas_distintas d where d.a = x.id and d.b = y.id)
+   order by x.nombre, y.nombre
+$$;
+revoke all on function public.posibles_repetidos() from public;
+grant execute on function public.posibles_repetidos() to authenticated;
+
+-- ---------- Cooperaciones: los que llegan después ----------
+-- Una ficha nueva (alguien que se registra o se agrega) entra como "No aplica"
+-- en las cooperaciones que ya estaban abiertas. Finanzas le pone "Sí aplica" si le toca.
+create or replace function public.llegan_despues()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.cooperacion_excluidos (cooperacion_id, joven_id, automatica)
+  select c.id, new.id, true from public.cooperaciones c where not c.cerrada
+  on conflict do nothing;
+  return new;
+end $$;
+drop trigger if exists jovenes_llegan_despues on public.jovenes;
+create trigger jovenes_llegan_despues after insert on public.jovenes
+  for each row execute function public.llegan_despues();
+
+-- ---------- Cortes de caja ----------
+create table if not exists public.cortes (
+  id         uuid primary key default gen_random_uuid(),
+  hasta      date not null unique,
+  entradas   numeric(12,2) not null,   -- del periodo (desde el corte anterior)
+  salidas    numeric(12,2) not null,
+  saldo      numeric(12,2) not null,   -- acumulado al cierre
+  notas      text,
+  hecho_por  uuid references public.perfiles (id) on delete set null default auth.uid(),
+  created_at timestamptz not null default now()
+);
+alter table public.cortes enable row level security;
+drop policy if exists "cortes_leer" on public.cortes;
+create policy "cortes_leer" on public.cortes for select to authenticated using (public.en_equipo('finanzas'));
+grant select on public.cortes to authenticated;
+
+create or replace function public.hacer_corte(p_hasta date, p_notas text default null)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare antes date; v uuid;
+begin
+  if not public.en_equipo('finanzas') then raise exception 'Solo el equipo de finanzas hace cortes.'; end if;
+  if p_hasta is null or p_hasta > public.hoy() then raise exception 'El corte tiene que ser de hoy o de un día que ya pasó.'; end if;
+  select max(hasta) into antes from public.cortes;
+  if antes is not null and p_hasta <= antes then
+    raise exception 'Ya hay un corte al %. El nuevo tiene que ser de después.', to_char(antes, 'DD/MM/YYYY');
+  end if;
+  insert into public.cortes (hasta, entradas, salidas, saldo, notas)
+  select p_hasta,
+         coalesce(sum(monto) filter (where tipo = 'entrada' and fecha > coalesce(antes, '-infinity'::date)), 0),
+         coalesce(sum(monto) filter (where tipo = 'salida'  and fecha > coalesce(antes, '-infinity'::date)), 0),
+         coalesce(sum(case when tipo = 'entrada' then monto else -monto end), 0),
+         nullif(trim(coalesce(p_notas, '')), '')
+    from public.movimientos
+   where not anulado and fecha <= p_hasta
+  returning id into v;
+  return v;
+end $$;
+
+-- Por si se equivocaron: solo un admin, y solo el último
+create or replace function public.deshacer_corte(p_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not public.es_admin() then raise exception 'Solo un admin puede deshacer un corte.'; end if;
+  if p_id is distinct from (select id from public.cortes order by hasta desc limit 1) then
+    raise exception 'Solo se puede deshacer el último corte.';
+  end if;
+  delete from public.cortes where id = p_id;
+end $$;
+revoke all on function public.hacer_corte(date, text), public.deshacer_corte(uuid) from public;
+grant execute on function public.hacer_corte(date, text), public.deshacer_corte(uuid) to authenticated;
+
+create or replace function public.candado_cortes()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare h date;
+begin
+  if current_setting('jovenes.fusion', true) = 'si' then return new; end if;
+  select max(hasta) into h from public.cortes;
+  if h is null then return new; end if;
+  if tg_op = 'INSERT' and new.fecha <= h then
+    raise exception 'Ese periodo ya está cerrado (corte al %). Regístralo con una fecha posterior.', to_char(h, 'DD/MM/YYYY');
+  end if;
+  if tg_op = 'UPDATE' and old.fecha <= h and new.anulado and not old.anulado then
+    raise exception 'Ese movimiento es de un periodo cerrado (corte al %). No se anula: registra un ajuste con fecha de hoy.', to_char(h, 'DD/MM/YYYY');
+  end if;
+  return new;
+end $$;
+drop trigger if exists movimientos_cortes on public.movimientos;
+create trigger movimientos_cortes before insert or update on public.movimientos
+  for each row execute function public.candado_cortes();

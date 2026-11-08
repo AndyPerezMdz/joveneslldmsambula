@@ -14,12 +14,14 @@ export default async function NuevoMovimiento({ searchParams }: { searchParams: 
   const { supabase } = await requerir((p) => enEquipo(p, "finanzas"));
   const { actividad, tipo } = await searchParams;
   const h = hoy();
-  const [{ data }, { data: cats }] = await Promise.all([
+  const [{ data }, { data: cats }, { data: corte }] = await Promise.all([
     supabase.from("actividades").select("id, titulo, fecha")
       .gte("fecha", sumarDias(h, -90)).lte("fecha", sumarDias(h, 60))
       .order("fecha", { ascending: false }),
     supabase.from("categorias").select(SELECT_CAT).eq("activa", true).order("orden").order("nombre"),
+    supabase.from("cortes").select("hasta").order("hasta", { ascending: false }).limit(1).maybeSingle<{ hasta: string }>(),
   ]);
+  const minimo = corte?.hasta ? sumarDias(corte.hasta, 1) : undefined;
   const volver = actividad ? `/actividades/${actividad}` : "";
 
   return (
@@ -28,7 +30,7 @@ export default async function NuevoMovimiento({ searchParams }: { searchParams: 
       <h1 className={ui.h1}>Registrar movimiento</h1>
       <Formulario action={registrarMovimiento} className={`${ui.card} space-y-6`}>
         <input type="hidden" name="volver" value={volver} />
-        <CamposMovimiento tipoInicial={tipo === "entrada" ? "entrada" : "salida"} fecha={h} actividades={data ?? []} actividad={actividad} categorias={(cats ?? []) as Categoria[]} />
+        <CamposMovimiento tipoInicial={tipo === "entrada" ? "entrada" : "salida"} fecha={h} actividades={data ?? []} actividad={actividad} categorias={(cats ?? []) as Categoria[]} fechaMinima={minimo} />
         <p className="text-xs text-stone-500">Una vez guardado no se edita. Si te equivocas, se anula y se registra otra vez.</p>
         <div className="flex justify-end"><Submit>Guardar</Submit></div>
       </Formulario>

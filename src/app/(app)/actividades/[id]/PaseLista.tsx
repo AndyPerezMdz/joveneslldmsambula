@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { semanasEntre } from "@/lib/fechas";
 import { clienteNavegador } from "@/lib/supabase/client";
 import { SEMANAS_ALERTA } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 
-type Joven = { id: string; nombre: string; recientes: number; ultima: string | null };
+type Joven = { id: string; nombre: string; recientes: number; ultima: string | null; faltas: number };
 type Op = { a: string; j: string; p: boolean };
 
 // Cambios que no se han podido guardar (sin internet). Viven en este navegador.
@@ -23,11 +22,12 @@ const guardarCola = (c: Op[]) => {
  * Se marca al instante en pantalla y se guarda en segundo plano;
  * si no hay internet, se queda en cola y se manda cuando regrese.
  */
-export function PaseLista({ actividadId, jovenes, presentesIniciales, hoy }: {
+export function PaseLista({ actividadId, jovenes, presentesIniciales, bloqueo }: {
   actividadId: string;
   jovenes: Joven[];
   presentesIniciales: string[];
-  hoy: string;
+  /** Si no se puede pasar lista (futura, cancelada o ya cerrada), el porqué: solo se ve. */
+  bloqueo: string | null;
 }) {
   const [presentes, setPresentes] = useState(() => new Set(presentesIniciales));
   const [pendientes, setPendientes] = useState(0);
@@ -52,7 +52,7 @@ export function PaseLista({ actividadId, jovenes, presentesIniciales, hoy }: {
         if (e) {
           // Sin red: se queda en cola. Cualquier otro error: se descarta y se avisa.
           if (!navigator.onLine || /fetch|network/i.test(e.message)) break;
-          setError("No se pudo guardar un cambio. Recarga la página y revisa la lista.");
+          setError(`No se pudo guardar un cambio: ${e.message} Recarga la página y revisa la lista.`);
         }
         // Quitar ESA operación (mientras se mandaba pudieron tocar a alguien más)
         cola = leerCola();
@@ -82,6 +82,7 @@ export function PaseLista({ actividadId, jovenes, presentesIniciales, hoy }: {
   }, [actividadId, mandar]);
 
   function tocar(j: string) {
+    if (bloqueo) return;
     const p = !presentes.has(j);
     setPresentes((s) => {
       const n = new Set(s);
@@ -109,7 +110,6 @@ export function PaseLista({ actividadId, jovenes, presentesIniciales, hoy }: {
 
   const fila = (j: Joven) => {
     const on = presentes.has(j.id);
-    const semanas = j.ultima ? semanasEntre(j.ultima, hoy) : null;
     const iniciales = j.nombre.split(" ").filter(Boolean).slice(0, 2).map((x) => x[0]).join("").toUpperCase();
     return (
       <li key={j.id}>
@@ -117,7 +117,8 @@ export function PaseLista({ actividadId, jovenes, presentesIniciales, hoy }: {
           type="button"
           onClick={() => tocar(j.id)}
           aria-pressed={on}
-          className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition active:scale-[.99] ${
+          disabled={!!bloqueo}
+          className={`flex w-full disabled:cursor-default disabled:active:scale-100 items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition active:scale-[.99] ${
             on ? "border-green-700/40 bg-green-50" : "border-stone-200 bg-superficie hover:border-oro/60"
           }`}
         >
@@ -126,8 +127,8 @@ export function PaseLista({ actividadId, jovenes, presentesIniciales, hoy }: {
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate font-medium">{j.nombre}</span>
-            {semanas !== null && semanas >= SEMANAS_ALERTA && (
-              <span className="text-xs font-medium text-red-600">{semanas} semanas sin venir</span>
+            {j.ultima !== null && j.faltas >= SEMANAS_ALERTA && (
+              <span className="text-xs font-medium text-red-600">{j.faltas} semanas sin venir</span>
             )}
             {j.ultima === null && <span className="text-xs text-stone-400">Nunca ha venido</span>}
           </span>
@@ -148,6 +149,9 @@ export function PaseLista({ actividadId, jovenes, presentesIniciales, hoy }: {
         </span>
       </div>
 
+      {bloqueo && (
+        <p className="rounded-xl bg-stone-100 px-3 py-2 text-sm text-stone-600">{bloqueo}</p>
+      )}
       {pendientes > 0 && (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {pendientes === 1 ? "1 cambio" : `${pendientes} cambios`} sin guardar. Se mandan solos cuando haya internet.

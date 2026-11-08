@@ -7,7 +7,7 @@ import { fechaLarga } from "@/lib/fechas";
 import { requerir } from "@/lib/supabase/server";
 import { enEquipo, SELECT_MOV, type Cooperacion, type Movimiento } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
-import { cambiarExclusion, cerrarCooperacion, registrarPago } from "../../actions";
+import { cambiarExclusion, cerrarCooperacion, incluirTardios, registrarPago } from "../../actions";
 import { MovimientoFila } from "../../MovimientoFila";
 
 export const metadata = { title: "Cooperación" };
@@ -18,11 +18,14 @@ export default async function DetalleCooperacion({ params }: { params: Promise<{
   const { id } = await params;
   const { supabase } = await requerir((p) => enEquipo(p, "finanzas"));
 
-  const [{ data: c }, { data: e }, { data: m }] = await Promise.all([
+  const [{ data: c }, { data: e }, { data: m }, { data: aut }] = await Promise.all([
     supabase.from("cooperaciones").select("id, concepto, monto, fecha_limite, actividad_id, cerrada").eq("id", id).maybeSingle<Cooperacion>(),
     supabase.rpc("estado_cooperacion", { p_id: id }),
     supabase.from("movimientos").select(SELECT_MOV).eq("cooperacion_id", id).order("created_at", { ascending: false }),
+    supabase.from("cooperacion_excluidos").select("joven_id").eq("cooperacion_id", id).eq("automatica", true),
   ]);
+  // Llegaron después de abierta la cooperación: no aplica hasta que finanzas diga
+  const tardios = new Set(((aut ?? []) as { joven_id: string }[]).map((x) => x.joven_id));
   if (!c) notFound();
 
   const monto = Number(c.monto);
@@ -72,7 +75,7 @@ export default async function DetalleCooperacion({ params }: { params: Promise<{
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">{x.nombre}</span>
                   <span className={`text-xs font-medium ${["text-red-600", "text-amber-700", "text-green-700", "text-stone-400"][s]}`}>
-                    {["No ha dado", `Dio ${pesos(x.aportado)} · faltan ${pesos(falta)}`, x.aportado > monto ? `Completo (dio ${pesos(x.aportado)})` : "Completo", "No aplica"][s]}
+                    {["No ha dado", `Dio ${pesos(x.aportado)} · faltan ${pesos(falta)}`, x.aportado > monto ? `Completo (dio ${pesos(x.aportado)})` : "Completo", tardios.has(x.joven_id) ? "No aplica · llegó después" : "No aplica"][s]}
                   </span>
                 </span>
                 {!c.cerrada && (
@@ -110,6 +113,17 @@ export default async function DetalleCooperacion({ params }: { params: Promise<{
             ))}
           </ul>
         </section>
+      )}
+
+      {!c.cerrada && tardios.size > 0 && (
+        <Formulario action={incluirTardios} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-stone-200/70 bg-superficie p-4 text-sm">
+          <input type="hidden" name="cooperacion_id" value={c.id} />
+          <span className="text-stone-600">
+            {tardios.size === 1 ? "1 persona llegó" : `${tardios.size} personas llegaron`} después de abrir esta cooperación y no {tardios.size === 1 ? "queda" : "quedan"} debiendo.
+            Si sí les toca, tócales &quot;Sí aplica&quot; o inclúyelos a todos.
+          </span>
+          <Submit variante="btnSec" confirmar={`¿Incluir a los ${tardios.size} que llegaron después? A cada uno le va a tocar dar ${pesos(monto)}.`}>Incluir a todos</Submit>
+        </Formulario>
       )}
 
       <Formulario action={cerrarCooperacion} className="flex justify-end">

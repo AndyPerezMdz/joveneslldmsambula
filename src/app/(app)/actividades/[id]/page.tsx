@@ -6,8 +6,8 @@ import { fechaLarga, horaBonita, hoy } from "@/lib/fechas";
 import { requerirMiembro } from "@/lib/supabase/server";
 import { Album } from "@/components/Album";
 import { pesos } from "@/lib/dinero";
-import { driveListo, fotosDrive, repartir, type Foto } from "@/lib/drive";
-import { enEquipo, puedeOrganizar, SELECT_MOV, tipo, type Actividad, type Movimiento, type ResumenJoven } from "@/lib/tipos";
+import { driveListo, ENLACE_SUBIR_FOTOS, fotosDrive, repartir, type Foto } from "@/lib/drive";
+import { bloqueoLista, enEquipo, esEncargado, esLider, puedeOrganizar, SELECT_MOV, tipo, type Actividad, type Movimiento, type ResumenJoven } from "@/lib/tipos";
 import { MovimientoFila } from "../../finanzas/MovimientoFila";
 import { ui } from "@/lib/ui";
 import { ActividadCampos } from "../ActividadCampos";
@@ -29,6 +29,7 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
 
   const t = tipo(a.tipo);
   const pasaLista = enEquipo(perfil, "asistencia");
+  const bloqueo = bloqueoLista(a, hoy(), esEncargado(perfil) || esLider(perfil, "asistencia"));
 
   let lista: ResumenJoven[] = [];
   let presentes: string[] = [];
@@ -49,7 +50,7 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
       const todas = await fotosDrive();
       const delDia = todas.filter((f) => f.fecha === a.fecha);
       if (delDia.length) {
-        const { data: mismas } = await supabase.from("actividades").select("id, fecha, hora").eq("fecha", a.fecha);
+        const { data: mismas } = await supabase.from("actividades").select("id, fecha, hora, hora_fin").eq("fecha", a.fecha).eq("cancelada", false);
         fotos = repartir(delDia, mismas ?? []).album.get(a.id) ?? [];
       }
     } catch { /* si Drive falla, la actividad se ve igual */ }
@@ -106,25 +107,30 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
           <PaseLista
             key={lista.length}
             actividadId={a.id}
-            jovenes={lista.map((j) => ({ id: j.joven_id, nombre: j.nombre, recientes: j.recientes, ultima: j.ultima }))}
+            jovenes={lista.map((j) => ({ id: j.joven_id, nombre: j.nombre, recientes: j.recientes, ultima: j.ultima, faltas: j.semanas_falta }))}
             presentesIniciales={presentes}
-            hoy={hoy()}
+            bloqueo={bloqueo}
           />
-          <Formulario action={agregarYMarcar} className={`${ui.card} space-y-3`}>
+          {!bloqueo && <Formulario action={agregarYMarcar} className={`${ui.card} space-y-3`}>
             <input type="hidden" name="actividad_id" value={a.id} />
             <label className={ui.label}>
               ¿Llegó alguien que no está en la lista?
               <input name="nombre" required placeholder="Nombre completo" className={ui.input} />
             </label>
             <div className="flex justify-end"><Submit variante="btnSec">Agregar y marcar</Submit></div>
-          </Formulario>
+          </Formulario>}
         </section>
       )}
 
-      {fotos.length > 0 && (
+      {enEquipo(perfil, "evidencias") && (fotos.length > 0 || !a.cancelada) && (
         <section className="space-y-3">
-          <h2 className={ui.h2}>Fotos ({fotos.length})</h2>
-          <Album fotos={fotos} />
+          <div className="flex items-center justify-between gap-3">
+            <h2 className={ui.h2}>Fotos{fotos.length > 0 && ` (${fotos.length})`}</h2>
+            <a href={ENLACE_SUBIR_FOTOS} target="_blank" rel="noopener noreferrer" className={ui.btnMini}>+ Subir fotos al Drive</a>
+          </div>
+          {fotos.length > 0
+            ? <Album fotos={fotos} />
+            : <p className="text-sm text-stone-500">Todavía no hay fotos de esta actividad. Las que se suban al Drive con su fecha y hora aparecen aquí solas.</p>}
         </section>
       )}
 

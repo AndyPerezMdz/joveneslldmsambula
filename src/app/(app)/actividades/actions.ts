@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { bool, clienteCon, intentar, ok, opt, txt, type Resultado } from "@/lib/forms";
-import { enEquipo, esEncargado, puedeOrganizar, TIPOS, type TipoActividad } from "@/lib/tipos";
+import { hoy } from "@/lib/fechas";
+import { bloqueoLista, enEquipo, esEncargado, esLider, puedeOrganizar, TIPOS, type TipoActividad } from "@/lib/tipos";
 
 function datos(fd: FormData) {
   const titulo = txt(fd, "titulo");
@@ -57,8 +58,13 @@ export async function borrarActividad(_p: Resultado, fd: FormData): Promise<Resu
 export async function agregarYMarcar(_p: Resultado, fd: FormData): Promise<Resultado> {
   const nombre = txt(fd, "nombre").replace(/\s+/g, " ");
   return intentar(async () => {
-    const { supabase } = await clienteCon((p) => enEquipo(p, "asistencia"));
+    const { supabase, perfil } = await clienteCon((p) => enEquipo(p, "asistencia"));
     if (nombre.length < 2) throw new Error("Escribe su nombre.");
+    // Antes de crear la ficha: que sí se pueda pasar lista en esta actividad
+    const { data: act } = await supabase.from("actividades").select("fecha, cancelada").eq("id", txt(fd, "actividad_id")).maybeSingle();
+    if (!act) throw new Error("No se encontró la actividad.");
+    const b = bloqueoLista(act, hoy(), esEncargado(perfil) || esLider(perfil, "asistencia"));
+    if (b) throw new Error(b);
     const { data, error } = await supabase.from("jovenes").insert({ nombre }).select("id").single();
     ok(error);
     const { error: e2 } = await supabase

@@ -5,8 +5,10 @@ import type { Categoria, TipoMov } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 
 /** Entrada/salida cambia las categorías que se ofrecen. */
-export function CamposMovimiento({ tipoInicial, fecha, actividades, actividad, categorias }: {
+export function CamposMovimiento({ tipoInicial, fecha, actividades, actividad, categorias, fechaMinima }: {
   tipoInicial: TipoMov;
+  /** Día siguiente al último corte de caja: antes de eso ya está cerrado */
+  fechaMinima?: string;
   categorias: Categoria[];
   fecha: string;
   actividades: { id: string; titulo: string; fecha: string }[];
@@ -101,7 +103,7 @@ export function CamposMovimiento({ tipoInicial, fecha, actividades, actividad, c
       </div>
       <label className={ui.label}>
         Fecha
-        <input name="fecha" type="date" required defaultValue={fecha} className={ui.input} />
+        <input name="fecha" type="date" required defaultValue={fecha} min={fechaMinima} className={ui.input} />
       </label>
       <label className={ui.label}>
         Actividad <span className="font-normal text-stone-400">(opcional)</span>

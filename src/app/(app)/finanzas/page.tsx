@@ -17,7 +17,7 @@ export default async function Finanzas({ searchParams }: { searchParams: Promise
   const mes = q && /^\d{4}-\d{2}$/.test(q) ? q : actual;
   const filtro = tipo === "entrada" || tipo === "salida" ? tipo : null;
 
-  const [{ data: saldo }, { data: movs }, { data: acts }, { data: cats }, { data: coops }, { data: pagos }] = await Promise.all([
+  const [{ data: saldo }, { data: movs }, { data: acts }, { data: cats }, { data: coops }, { data: pagos }, { data: corte }] = await Promise.all([
     supabase.rpc("saldo"),
     supabase.from("movimientos").select(SELECT_MOV)
       .gte("fecha", `${mes}-01`).lt("fecha", `${mesVecino(mes, 1)}-01`)
@@ -26,7 +26,9 @@ export default async function Finanzas({ searchParams }: { searchParams: Promise
     supabase.from("categorias").select("id, nombre"),
     supabase.from("cooperaciones").select("id, concepto, monto").eq("cerrada", false),
     supabase.from("movimientos").select("cooperacion_id, monto").not("cooperacion_id", "is", null).eq("anulado", false),
+    supabase.from("cortes").select("hasta").order("hasta", { ascending: false }).limit(1).maybeSingle<{ hasta: string }>(),
   ]);
+  const cerradoHasta = corte?.hasta ?? "";
   const lista = (movs ?? []) as Movimiento[];
   const titulos = new Map((acts ?? []).map((a: { id: string; titulo: string }) => [a.id, a.titulo]));
   const nombres = new Map((cats ?? []).map((c: { id: string; nombre: string }) => [c.id, c.nombre]));
@@ -60,7 +62,10 @@ export default async function Finanzas({ searchParams }: { searchParams: Promise
 
   return (
     <>
-      <Encabezado titulo="Finanzas" sub="Nada se borra: lo anulado queda tachado en el historial.">
+      <Encabezado titulo="Finanzas" sub={cerradoHasta
+        ? `Nada se borra: lo anulado queda tachado. Cerrado hasta el ${cerradoHasta.slice(8)}/${cerradoHasta.slice(5, 7)}/${cerradoHasta.slice(0, 4)}.`
+        : "Nada se borra: lo anulado queda tachado en el historial."}>
+        <Link href="/finanzas/cortes" className={ui.btnSec}>Cortes</Link>
         <Link href="/finanzas/categorias" className={ui.btnSec}>Categorías</Link>
         <Link href="/finanzas/cooperaciones" className={ui.btnSec}>Cooperaciones</Link>
         <Link href="/finanzas/nuevo" className={ui.btnOro}>+ Registrar</Link>
@@ -110,7 +115,7 @@ export default async function Finanzas({ searchParams }: { searchParams: Promise
           ) : (
             <ul className="divide-y divide-stone-200/70 border-t border-stone-200/70 md:border-t-0">
               {visibles.map((m) => (
-                <MovimientoFila key={m.id} m={m} puedeAnular categoria={nombres.get(m.categoria) ?? m.categoria}
+                <MovimientoFila key={m.id} m={m} puedeAnular={m.fecha > cerradoHasta} categoria={nombres.get(m.categoria) ?? m.categoria}
                   detalle={m.actividad_id ? titulos.get(m.actividad_id) : undefined} />
               ))}
             </ul>
