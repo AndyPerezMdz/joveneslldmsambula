@@ -4,7 +4,7 @@ import { Submit } from "@/components/Submit";
 import { Encabezado } from "@/components/Tarjeta";
 import { horaBonita } from "@/lib/fechas";
 import { requerir } from "@/lib/supabase/server";
-import { DIAS_CORTOS, esEncargado, TIPOS, type Horario } from "@/lib/tipos";
+import { DIAS_CORTOS, esAdmin, TIPOS, type Horario } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 import { actualizarHorario, crearHorario } from "../actions";
 
@@ -44,7 +44,7 @@ function Campos({ h }: { h?: Horario }) {
 }
 
 export default async function Horarios() {
-  const { supabase } = await requerir(esEncargado);
+  const { supabase } = await requerir(esAdmin);
   const { data } = await supabase.from("horarios").select("id, titulo, tipo, dias, hora, hora_fin, lugar, activo").order("hora");
   const lista = (data ?? []) as Horario[];
   const dias = (h: Horario) => (h.dias.length === 7 ? "Diario" : [...h.dias].sort().map((d) => DIAS_CORTOS[d]).join(", "));

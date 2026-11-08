@@ -93,8 +93,8 @@ export const enEquipo = (p: P, e: Equipo) =>
 export const esLider = (p: P, e: Equipo) => !!p && (esAdmin(p) || !!p.lider_de?.includes(e));
 /** Ve la pantalla Equipo: admins y encargados de algún grupo. */
 export const veEquipo = (p: P) => !!p && (esAdmin(p) || (p.lider_de?.length ?? 0) > 0);
-/** Cualquiera de un equipo puede crear actividades. */
-export const puedeOrganizar = (p: P) => !!p && (esEncargado(p) || p.equipos.length > 0 || (p.lider_de?.length ?? 0) > 0);
+/** Crear, editar, cancelar e importar actividades: solo el admin. */
+export const puedeOrganizar = (p: P) => esAdmin(p);
 
 // ---------- Finanzas ----------
 export type TipoMov = "entrada" | "salida";

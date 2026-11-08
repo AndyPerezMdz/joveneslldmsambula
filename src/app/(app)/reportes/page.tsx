@@ -4,7 +4,7 @@ import { pesos } from "@/lib/dinero";
 import { driveListo, fotosDrive, repartir, type Foto } from "@/lib/drive";
 import { haceCuanto, hoy, mesVecino, nombreMes, partesFecha } from "@/lib/fechas";
 import { requerir } from "@/lib/supabase/server";
-import { enEquipo, esEncargado, hayQueBuscar, tipo, type Actividad, type Movimiento, type ResumenJoven, SELECT_MOV } from "@/lib/tipos";
+import { enEquipo, hayQueBuscar, tipo, type Actividad, type Movimiento, type ResumenJoven, SELECT_MOV } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 import { BotonImprimir } from "./BotonImprimir";
 
@@ -31,7 +31,7 @@ function Dato({ n, v, c = "text-titulo" }: { n: string; v: string; c?: string })
 }
 
 export default async function Reportes({ searchParams }: { searchParams: Promise<{ mes?: string }> }) {
-  const { supabase, perfil } = await requerir((p) => esEncargado(p) || enEquipo(p, "finanzas"));
+  const { supabase, perfil } = await requerir((p) => enEquipo(p, "asistencia") || enEquipo(p, "finanzas"));
   const { mes: q } = await searchParams;
   const h = hoy();
   const actual = h.slice(0, 7);
@@ -119,7 +119,9 @@ export default async function Reportes({ searchParams }: { searchParams: Promise
   return (
     <div className="space-y-5 print:space-y-4 print:text-[12px]">
       <div className="no-print">
-        <Encabezado titulo="Reportes" sub="Resumen del mes para los encargados. Descárgalo en PDF para mandarlo.">
+        <Encabezado titulo="Reportes" sub="Resumen del mes de tu equipo. Descárgalo en PDF para mandarlo, o en Excel para trabajarlo.">
+          {verAsis && <a href={`/reportes/descargar?que=asistencia&mes=${mes}`} className={ui.btnSec}>Asistencia (Excel)</a>}
+          {verDinero && <a href={`/reportes/descargar?que=finanzas&mes=${mes}`} className={ui.btnSec}>Movimientos (Excel)</a>}
           <BotonImprimir />
         </Encabezado>
         <div className="flex items-center gap-1">
@@ -136,7 +138,7 @@ export default async function Reportes({ searchParams }: { searchParams: Promise
         <p className="mt-1 text-sm text-white/70 print:text-stone-500">Generado el {partesFecha(h).dia} {partesFecha(h).mes} por {perfil.nombre}</p>
       </div>
 
-      <Seccion titulo="Actividades y asistencia">
+      {verAsis && <Seccion titulo="Actividades y asistencia">
         <div className={`grid gap-3 ${verAsis ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-2"}`}>
           <Dato n="Actividades" v={String(acts.length)} />
           <Dato n="Cultos" v={String(acts.filter((a) => a.tipo === "culto").length)} />
@@ -188,7 +190,7 @@ export default async function Reportes({ searchParams }: { searchParams: Promise
             )}
           </div>
         )}
-      </Seccion>
+      </Seccion>}
 
       {verDinero && (
         <Seccion titulo="Dinero">

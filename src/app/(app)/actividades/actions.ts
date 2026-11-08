@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { bool, clienteCon, intentar, ok, opt, txt, type Resultado } from "@/lib/forms";
 import { hoy } from "@/lib/fechas";
-import { bloqueoLista, enEquipo, esEncargado, esLider, puedeOrganizar, TIPOS, type TipoActividad } from "@/lib/tipos";
+import { bloqueoLista, enEquipo, esAdmin, esEncargado, esLider, puedeOrganizar, TIPOS, type TipoActividad } from "@/lib/tipos";
 
 function datos(fd: FormData) {
   const titulo = txt(fd, "titulo");
@@ -27,6 +27,35 @@ export async function crearActividad(_p: Resultado, fd: FormData): Promise<Resul
   if (!r?.ok) return r;
   revalidatePath("/");
   redirect(`/actividades/${id}`);
+}
+
+/** Importar: crea varias de un jalón y manda a revisarlas. */
+export async function crearActividades(_p: Resultado, fd: FormData): Promise<Resultado> {
+  let ids: string[] = [];
+  const r = await intentar(async () => {
+    const { supabase } = await clienteCon(puedeOrganizar);
+    let crudas: Record<string, string>[];
+    try { crudas = JSON.parse(txt(fd, "filas")); } catch { throw new Error("No se entendió la lista."); }
+    if (!Array.isArray(crudas) || !crudas.length) throw new Error("No hay actividades marcadas.");
+    if (crudas.length > 60) throw new Error("Son demasiadas de un jalón (máximo 60).");
+    const filas = crudas.map((x, i) => {
+      const titulo = String(x.titulo ?? "").trim().replace(/\s+/g, " ");
+      const fecha = String(x.fecha ?? "");
+      const tipo = String(x.tipo ?? "otra") as TipoActividad;
+      const hora = /^\d{2}:\d{2}$/.test(x.hora ?? "") ? x.hora : null;
+      const hora_fin = /^\d{2}:\d{2}$/.test(x.hora_fin ?? "") ? x.hora_fin : null;
+      if (!titulo) throw new Error(`La actividad ${i + 1} no tiene nombre.`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) throw new Error(`"${titulo}" no tiene fecha.`);
+      if (!TIPOS.some((t) => t.v === tipo)) throw new Error(`"${titulo}" tiene un tipo raro.`);
+      return { titulo, fecha, tipo, hora, hora_fin, lugar: String(x.lugar ?? "").trim() || null, notas: String(x.notas ?? "").trim() || null };
+    });
+    const { data, error } = await supabase.from("actividades").insert(filas).select("id");
+    ok(error);
+    ids = (data ?? []).map((x: { id: string }) => x.id);
+  });
+  if (!r?.ok) return r;
+  revalidatePath("/", "layout");
+  redirect(`/actividades/importar/revisar?ids=${ids.join(",")}`);
 }
 
 export async function actualizarActividad(_p: Resultado, fd: FormData): Promise<Resultado> {
@@ -98,7 +127,7 @@ function datosHorario(fd: FormData) {
 
 export async function crearHorario(_p: Resultado, fd: FormData): Promise<Resultado> {
   return intentar(async () => {
-    const { supabase } = await clienteCon(esEncargado);
+    const { supabase } = await clienteCon(esAdmin);
     ok((await supabase.from("horarios").insert(datosHorario(fd))).error);
     revalidatePath("/", "layout");
   }, "Horario agregado. Sus actividades se crean solas.");
@@ -106,7 +135,7 @@ export async function crearHorario(_p: Resultado, fd: FormData): Promise<Resulta
 
 export async function actualizarHorario(_p: Resultado, fd: FormData): Promise<Resultado> {
   return intentar(async () => {
-    const { supabase } = await clienteCon(esEncargado);
+    const { supabase } = await clienteCon(esAdmin);
     ok((await supabase.from("horarios").update({ ...datosHorario(fd), activo: bool(fd, "activo") }).eq("id", txt(fd, "id"))).error);
     revalidatePath("/", "layout");
   }, "Horario guardado. Las actividades que vienen ya se ajustaron.");

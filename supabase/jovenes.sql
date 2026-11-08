@@ -1219,3 +1219,17 @@ end $$;
 drop trigger if exists movimientos_cortes on public.movimientos;
 create trigger movimientos_cortes before insert or update on public.movimientos
   for each row execute function public.candado_cortes();
+
+-- ============================================================
+-- 16. SOLO EL ADMIN ORGANIZA
+--   Crear, editar, cancelar e importar actividades (y los horarios fijos)
+--   es solo del admin. Cada equipo hace lo suyo sobre ellas: lista, dinero, fotos.
+-- ============================================================
+create or replace function public.puede_organizar()
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.es_admin()
+$$;
+
+drop policy if exists "horarios_escribir" on public.horarios;
+create policy "horarios_escribir" on public.horarios for all to authenticated
+  using (public.es_admin()) with check (public.es_admin());

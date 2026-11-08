@@ -5,7 +5,8 @@ import { asegurarDias } from "@/lib/calendario";
 import { horaBonita, hoy, nombreMes, partesFecha, sumarDias } from "@/lib/fechas";
 import { lunes } from "@/lib/resumen";
 import { requerirMiembro } from "@/lib/supabase/server";
-import { enEquipo, esEncargado, puedeOrganizar, tipo, type Actividad } from "@/lib/tipos";
+import { ENLACE_SUBIR_FOTOS } from "@/lib/drive";
+import { DIAS_LISTA, enEquipo, esAdmin, esEncargado, esLider, tipo, type Actividad } from "@/lib/tipos";
 import { ui } from "@/lib/ui";
 
 export const metadata = { title: "Actividades" };
@@ -18,6 +19,54 @@ export default async function Actividades({ searchParams }: { searchParams: Prom
   const { ver = "semana", sem, dia } = await searchParams;
   const h = hoy();
   const veLista = enEquipo(perfil, "asistencia");
+
+  // Fuera del admin nadie organiza: cada quien ve lo del día y hace lo suyo
+  if (!esAdmin(perfil)) {
+    const listaTodo = esEncargado(perfil) || esLider(perfil, "asistencia");
+    const desde = veLista ? sumarDias(h, listaTodo ? -14 : -DIAS_LISTA) : h;
+    await asegurarDias(supabase, h, h);
+    const { data } = await supabase.from("actividades").select(SELECT).eq("cancelada", false)
+      .gte("fecha", desde).lte("fecha", h).order("fecha", { ascending: false }).order("hora", { nullsFirst: true });
+    const filas = (data ?? []) as Fila[];
+    const deHoy = filas.filter((a) => a.fecha === h);
+    const antes = filas.filter((a) => a.fecha < h);
+    const veFotos = enEquipo(perfil, "evidencias");
+    const fila = (a: Fila) => (
+      <TarjetaActividad key={a.id} a={a} compacta={a.fecha === h} destacada={a.fecha === h} extra={veLista ? (
+        <span className="shrink-0 text-right leading-tight">
+          <span className="block text-lg font-semibold tabular-nums text-titulo">{a.asistencias[0]?.count ?? 0}</span>
+          <span className="text-[10px] uppercase tracking-wider text-stone-500">vinieron</span>
+        </span>
+      ) : null} />
+    );
+    const que = [veLista && "pasa lista", enEquipo(perfil, "finanzas") && "registra el dinero", veFotos && "sube las fotos"].filter(Boolean) as string[];
+    return (
+      <>
+        <Encabezado titulo="Actividades de hoy"
+          sub={que.length ? `Entra a la actividad y ${que.join(", ").replace(/, ([^,]*)$/, " y $1")}.` : "Lo que hay hoy en el templo."}>
+          {veFotos && <a href={ENLACE_SUBIR_FOTOS} target="_blank" rel="noopener noreferrer" className={ui.btnOro}>Subir fotos al Drive</a>}
+        </Encabezado>
+        <section className="escalonado space-y-2">
+          <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-oro first-letter:uppercase">
+            {partesFecha(h).semana} {partesFecha(h).dia} {partesFecha(h).mes}
+          </h2>
+          {deHoy.length ? deHoy.map(fila) : (
+            <p className="rounded-3xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500">Hoy no hay actividades.</p>
+          )}
+        </section>
+        {antes.length > 0 && (
+          <section className="mt-8 space-y-2">
+            <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-oro">Días anteriores · la lista sigue abierta</h2>
+            <p className={ui.ayuda}>
+              {listaTodo ? "Como encargado puedes corregir cualquier lista; aquí están las de las últimas dos semanas."
+                : `Si algo quedó mal, todavía se corrige ${DIAS_LISTA} días después. Luego solo el encargado.`}
+            </p>
+            <div className="grid gap-2 lg:grid-cols-2">{antes.map(fila)}</div>
+          </section>
+        )}
+      </>
+    );
+  }
 
   const pestañas = [
     { v: "semana", n: "Semana" },
@@ -38,8 +87,9 @@ export default async function Actividades({ searchParams }: { searchParams: Prom
   );
   const botones = (
     <>
-      {esEncargado(perfil) && <Link href="/actividades/horarios" className={ui.btnSec}>Horarios fijos</Link>}
-      {puedeOrganizar(perfil) && <Link href="/actividades/nueva" className={ui.btnOro}>+ Actividad especial</Link>}
+      <Link href="/actividades/horarios" className={ui.btnSec}>Horarios fijos</Link>
+      <Link href="/actividades/importar" className={ui.btnSec}>Importar</Link>
+      <Link href="/actividades/nueva" className={ui.btnOro}>+ Actividad especial</Link>
     </>
   );
 
