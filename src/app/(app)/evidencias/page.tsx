@@ -74,8 +74,9 @@ export default async function Evidencias() {
 
       <div className="flex flex-wrap items-center gap-4 rounded-2xl bg-oro-suave p-4 text-sm text-titulo">
         <p className="min-w-56 flex-1">
-          <b>¿Cómo subo fotos?</b> Ábrelas en la carpeta del grupo y súbelas ahí (o a una subcarpeta).
-          En unos minutos aparecen aquí, ya acomodadas en su actividad por la fecha y hora en que se tomaron.
+          <b>¿Cómo subo fotos?</b> Súbelas directo a la carpeta del grupo, así nomás. En unos minutos aparecen aquí,
+          acomodadas en su actividad por la fecha y hora en que se tomaron. Si después las pasan a una carpeta con fecha
+          (ej. <i>2026-11-10 Venta de donas</i>), la app usa la fecha de la carpeta.
         </p>
         <a href={ENLACE_SUBIR_FOTOS} target="_blank" rel="noopener noreferrer" className={ui.btnOro}>Subir fotos al Drive</a>
       </div>

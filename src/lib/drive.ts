@@ -86,17 +86,42 @@ async function listar(q: string): Promise<Archivo[]> {
 
 const CARPETA = "application/vnd.google-apps.folder";
 
-/** Carpeta raíz + subcarpetas (hasta 2 niveles), sin "Tickets". */
-async function carpetasDeFotos(): Promise<string[]> {
-  const ids = [raiz()];
-  let nivel = [raiz()];
+/** Carpeta raíz + subcarpetas (hasta 2 niveles), sin "Tickets". Con la fecha que traiga su nombre. */
+async function carpetasDeFotos(): Promise<{ id: string; fecha: string | null }[]> {
+  const todas: { id: string; fecha: string | null }[] = [{ id: raiz(), fecha: null }];
+  let nivel = todas.slice();
   for (let i = 0; i < 2 && nivel.length; i++) {
-    const q = `(${nivel.map((id) => `'${id}' in parents`).join(" or ")}) and mimeType = '${CARPETA}' and trashed = false`;
+    const q = `(${nivel.map((c) => `'${c.id}' in parents`).join(" or ")}) and mimeType = '${CARPETA}' and trashed = false`;
+    const padre = new Map(nivel.map((c) => [c.id, c.fecha]));
     const hijas = (await listar(q)).filter((c) => c.name !== CARPETA_TICKETS);
-    nivel = hijas.map((c) => c.id);
-    ids.push(...nivel);
+    // La fecha de la subcarpeta manda; si no trae, hereda la de su carpeta de arriba
+    nivel = hijas.map((c) => ({ id: c.id, fecha: fechaDeNombre(c.name, c.createdTime) ?? padre.get(c.parents?.[0] ?? "") ?? null }));
+    todas.push(...nivel);
   }
-  return ids;
+  return todas;
+}
+
+const MESES: Record<string, number> = { ene: 1, feb: 2, mar: 3, abr: 4, may: 5, jun: 6, jul: 7, ago: 8, sep: 9, set: 9, oct: 10, nov: 11, dic: 12 };
+/**
+ * Fecha en el nombre de una carpeta: "2026-11-10 Venta", "10-11-2026", "10/11/26",
+ * "10 nov", "10 de noviembre 2026". Sin año, el de cuando se creó la carpeta.
+ */
+export function fechaDeNombre(nombre: string, creada?: string): string | null {
+  const n = nombre.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
+  const anioBase = creada ? Number(creada.slice(0, 4)) : new Date().getFullYear();
+  const armar = (d: number, m: number, a?: number) => {
+    const anio = a === undefined ? anioBase : a < 100 ? 2000 + a : a;
+    const f = `${anio}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const ok = m >= 1 && m <= 12 && new Date(`${f}T12:00:00Z`).getUTCDate() === d;
+    return ok ? f : null;
+  };
+  let m = n.match(/\b(20\d{2})[-_. /](\d{1,2})[-_. /](\d{1,2})\b/);
+  if (m) return armar(+m[3], +m[2], +m[1]);
+  m = n.match(/\b(\d{1,2})[-_./](\d{1,2})(?:[-_./](\d{2,4}))?\b/);
+  if (m) return armar(+m[1], +m[2], m[3] ? +m[3] : undefined);
+  m = n.match(/\b(\d{1,2})\s*(?:de\s+)?([a-z]{3})[a-z]*\.?(?:\s*(?:de\s+)?(20\d{2}))?/);
+  if (m && MESES[m[2]]) return armar(+m[1], MESES[m[2]], m[3] ? +m[3] : undefined);
+  return null;
 }
 
 // ---------- Fotos ----------
@@ -113,11 +138,13 @@ const fechaMerida = (iso: string) => {
  * Fecha de cada foto: la de la cámara (EXIF, "2026:11:08 19:42:10") y, si no trae
  * (fotos de WhatsApp, capturas), la fecha en que se subió a Drive.
  */
-function cuando(a: Archivo): { fecha: string; hora: string | null } {
+function cuando(a: Archivo, fechaCarpeta: string | null): { fecha: string; hora: string | null } {
   const t = a.imageMediaMetadata?.time;
   const m = t?.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2})/);
-  if (m && m[1] !== "0000") return { fecha: `${m[1]}-${m[2]}-${m[3]}`, hora: `${m[4]}:${m[5]}` };
-  return fechaMerida(a.createdTime);
+  const camara = m && m[1] !== "0000" ? { fecha: `${m[1]}-${m[2]}-${m[3]}`, hora: `${m[4]}:${m[5]}` } : null;
+  // Si la metieron a una carpeta con fecha, esa fecha manda (la hora solo sirve si es del mismo día)
+  if (fechaCarpeta) return camara?.fecha === fechaCarpeta ? camara : { fecha: fechaCarpeta, hora: null };
+  return camara ?? fechaMerida(a.createdTime);
 }
 
 async function leerFotos(): Promise<Foto[]> {
@@ -126,8 +153,9 @@ async function leerFotos(): Promise<Foto[]> {
   // Drive limita lo largo de la consulta: de 20 en 20 carpetas
   for (let i = 0; i < carpetas.length; i += 20) {
     const grupo = carpetas.slice(i, i + 20);
-    const q = `(${grupo.map((id) => `'${id}' in parents`).join(" or ")}) and mimeType contains 'image/' and trashed = false`;
-    for (const a of await listar(q)) fotos.push({ id: a.id, nombre: a.name, ...cuando(a) });
+    const fechaDe = new Map(grupo.map((c) => [c.id, c.fecha]));
+    const q = `(${grupo.map((c) => `'${c.id}' in parents`).join(" or ")}) and mimeType contains 'image/' and trashed = false`;
+    for (const a of await listar(q)) fotos.push({ id: a.id, nombre: a.name, ...cuando(a, fechaDe.get(a.parents?.[0] ?? "") ?? null) });
   }
   return fotos.sort((a, b) => (a.fecha + (a.hora ?? "")).localeCompare(b.fecha + (b.hora ?? "")));
 }
@@ -136,16 +164,22 @@ async function leerFotos(): Promise<Foto[]> {
 export const fotosDrive = unstable_cache(leerFotos, ["fotos-drive"], { revalidate: 300, tags: ["fotos"] });
 
 // ---------- Fotos ↔ actividades ----------
-type ActividadMin = { id: string; fecha: string; hora: string | null; hora_fin?: string | null };
+type ActividadMin = { id: string; fecha: string; hora: string | null; hora_fin?: string | null; horario_id?: string | null };
 
 const minutos = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 /** Margen: media hora antes de empezar; hasta una hora después de terminar (o 3 h si no dice cuándo termina). */
 const ANTES = 30, DESPUES = 60, DURACION = 180;
 
 /** ¿La foto cae en el horario de la actividad? */
-function cabe(a: ActividadMin, f: Foto, delDia: number): boolean {
+function cabe(a: ActividadMin, f: Foto, delDia: ActividadMin[]): boolean {
   if (!a.hora) return true;                       // actividad sin hora: todo el día
-  if (!f.hora) return delDia === 1;               // foto sin hora: solo si ese día hubo una sola
+  if (!f.hora) {
+    // Foto sin hora (WhatsApp, o de una carpeta con fecha): si ese día hubo una sola, esa;
+    // si no, la única especial del día (las oraciones de diario no cuentan)
+    if (delDia.length === 1) return true;
+    const especiales = delDia.filter((x) => !x.horario_id);
+    return especiales.length === 1 && especiales[0].id === a.id;
+  }
   const ini = minutos(a.hora) - ANTES;
   const fin = (a.hora_fin ? minutos(a.hora_fin) : minutos(a.hora) + DURACION) + DESPUES;
   const m = minutos(f.hora);
@@ -164,7 +198,7 @@ export function repartir<A extends ActividadMin>(fotos: Foto[], actividades: A[]
   const sueltas: Foto[] = [];
   for (const f of fotos) {
     const delDia = porDia.get(f.fecha) ?? [];
-    const caben = delDia.filter((a) => cabe(a, f, delDia.length));
+    const caben = delDia.filter((a) => cabe(a, f, delDia));
     if (!caben.length) { sueltas.push(f); continue; }
     const conHora = caben.filter((a) => a.hora).sort((a, b) => a.hora!.localeCompare(b.hora!));
     const elegida = (f.hora ? conHora.filter((a) => a.hora!.slice(0, 5) <= f.hora!).at(-1) : undefined) ?? conHora[0] ?? caben[0];

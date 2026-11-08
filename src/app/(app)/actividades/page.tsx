@@ -20,49 +20,62 @@ export default async function Actividades({ searchParams }: { searchParams: Prom
   const h = hoy();
   const veLista = enEquipo(perfil, "asistencia");
 
-  // Fuera del admin nadie organiza: cada quien ve lo del día y hace lo suyo
+  // Fuera del admin nadie organiza: cada quien ve lo del día (o lo pasado, para corregir) y hace lo suyo
   if (!esAdmin(perfil)) {
     const listaTodo = esEncargado(perfil) || esLider(perfil, "asistencia");
-    const desde = veLista ? sumarDias(h, listaTodo ? -14 : -DIAS_LISTA) : h;
+    const pasadas = ver === "pasadas";
     await asegurarDias(supabase, h, h);
-    const { data } = await supabase.from("actividades").select(SELECT).eq("cancelada", false)
-      .gte("fecha", desde).lte("fecha", h).order("fecha", { ascending: false }).order("hora", { nullsFirst: true });
+    let q = supabase.from("actividades").select(SELECT).eq("cancelada", false);
+    q = pasadas ? q.lt("fecha", h).gte("fecha", sumarDias(h, -120)).order("fecha", { ascending: false }) : q.eq("fecha", h);
+    const { data } = await q.order("hora", { nullsFirst: true });
     const filas = (data ?? []) as Fila[];
-    const deHoy = filas.filter((a) => a.fecha === h);
-    const antes = filas.filter((a) => a.fecha < h);
+    const porDia = new Map<string, Fila[]>();
+    for (const a of filas) porDia.set(a.fecha, [...(porDia.get(a.fecha) ?? []), a]);
     const veFotos = enEquipo(perfil, "evidencias");
+    const que = [veLista && "pasa lista", enEquipo(perfil, "finanzas") && "registra el dinero", veFotos && "sube las fotos"].filter(Boolean) as string[];
     const fila = (a: Fila) => (
-      <TarjetaActividad key={a.id} a={a} compacta={a.fecha === h} destacada={a.fecha === h} extra={veLista ? (
+      <TarjetaActividad key={a.id} a={a} compacta={!pasadas} destacada={!pasadas} extra={veLista ? (
         <span className="shrink-0 text-right leading-tight">
           <span className="block text-lg font-semibold tabular-nums text-titulo">{a.asistencias[0]?.count ?? 0}</span>
           <span className="text-[10px] uppercase tracking-wider text-stone-500">vinieron</span>
         </span>
       ) : null} />
     );
-    const que = [veLista && "pasa lista", enEquipo(perfil, "finanzas") && "registra el dinero", veFotos && "sube las fotos"].filter(Boolean) as string[];
     return (
       <>
-        <Encabezado titulo="Actividades de hoy"
+        <Encabezado titulo="Actividades"
           sub={que.length ? `Entra a la actividad y ${que.join(", ").replace(/, ([^,]*)$/, " y $1")}.` : "Lo que hay hoy en el templo."}>
           {veFotos && <a href={ENLACE_SUBIR_FOTOS} target="_blank" rel="noopener noreferrer" className={ui.btnOro}>Subir fotos al Drive</a>}
         </Encabezado>
-        <section className="escalonado space-y-2">
-          <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-oro first-letter:uppercase">
-            {partesFecha(h).semana} {partesFecha(h).dia} {partesFecha(h).mes}
-          </h2>
-          {deHoy.length ? deHoy.map(fila) : (
-            <p className="rounded-3xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500">Hoy no hay actividades.</p>
-          )}
-        </section>
-        {antes.length > 0 && (
-          <section className="mt-8 space-y-2">
-            <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-oro">Días anteriores · la lista sigue abierta</h2>
-            <p className={ui.ayuda}>
-              {listaTodo ? "Como encargado puedes corregir cualquier lista; aquí están las de las últimas dos semanas."
-                : `Si algo quedó mal, todavía se corrige ${DIAS_LISTA} días después. Luego solo el encargado.`}
-            </p>
-            <div className="grid gap-2 lg:grid-cols-2">{antes.map(fila)}</div>
-          </section>
+        <div className="mb-5 inline-flex rounded-xl border border-stone-200 bg-superficie p-1 text-sm">
+          {[{ v: "hoy", n: "Hoy" }, { v: "pasadas", n: "Pasadas" }].map((t) => (
+            <Link key={t.v} href={t.v === "hoy" ? "/actividades" : "/actividades?ver=pasadas"}
+              className={`rounded-lg px-4 py-1.5 font-medium transition ${(pasadas ? "pasadas" : "hoy") === t.v ? "bg-marca text-white" : "text-stone-500 hover:text-titulo"}`}>
+              {t.n}
+            </Link>
+          ))}
+        </div>
+        {pasadas && (
+          <p className={`${ui.ayuda} -mt-2 mb-4`}>
+            Para corregir lo que se pasó: alguien que sí vino, una entrada que no se registró, fotos que faltan.
+            {veLista && !listaTodo && ` La lista se corrige hasta ${DIAS_LISTA} días después; luego, solo el encargado de asistencia.`}
+          </p>
+        )}
+        {filas.length === 0 ? (
+          <p className="rounded-3xl border border-dashed border-stone-300 p-8 text-center text-sm text-stone-500">
+            {pasadas ? "No hay actividades pasadas." : "Hoy no hay actividades."}
+          </p>
+        ) : (
+          <div className={`escalonado grid gap-x-6 gap-y-6 ${pasadas ? "lg:grid-cols-2" : ""}`}>
+            {[...porDia.entries()].map(([d, lista]) => (
+              <section key={d} className="space-y-2">
+                <h2 className="text-xs font-bold uppercase tracking-[0.18em] text-oro">
+                  {d === h ? "Hoy · " : ""}{partesFecha(d).semana} {partesFecha(d).dia} {partesFecha(d).mes}
+                </h2>
+                {lista.map(fila)}
+              </section>
+            ))}
+          </div>
         )}
       </>
     );

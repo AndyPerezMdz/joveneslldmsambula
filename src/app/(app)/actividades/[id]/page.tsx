@@ -59,7 +59,7 @@ export default async function DetalleActividad({ params }: { params: Promise<{ i
       const todas = await fotosDrive();
       const delDia = todas.filter((f) => f.fecha === a.fecha);
       if (delDia.length) {
-        const { data: mismas } = await supabase.from("actividades").select("id, fecha, hora, hora_fin").eq("fecha", a.fecha).eq("cancelada", false);
+        const { data: mismas } = await supabase.from("actividades").select("id, fecha, hora, hora_fin, horario_id").eq("fecha", a.fecha).eq("cancelada", false);
         fotos = repartir(delDia, mismas ?? []).album.get(a.id) ?? [];
       }
     } catch { /* si Drive falla, la actividad se ve igual */ }
