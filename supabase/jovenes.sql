@@ -932,3 +932,47 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.buscar_nombres(text) from public;
 grant execute on function public.buscar_nombres(text) to anon, authenticated;
+
+-- ============================================================
+-- 14. TU CUENTA: CAMBIAR TU NOMBRE Y BORRAR TU CUENTA
+--   · El nombre cambia en tu perfil y en tu ficha de la lista, juntos.
+--   · Borrar la cuenta quita el acceso, el correo y el teléfono.
+--     La ficha (nombre, asistencia, cooperaciones) se queda: las cuentas del
+--     grupo no pueden quedar con hoyos. Si regresa, se registra y toca "Soy yo".
+-- ============================================================
+create or replace function public.cambiar_mi_nombre(p_nombre text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v text := regexp_replace(trim(coalesce(p_nombre, '')), '\s+', ' ', 'g');
+begin
+  if auth.uid() is null then raise exception 'Inicia sesión primero.'; end if;
+  if coalesce(array_length(string_to_array(v, ' '), 1), 0) < 2 then
+    raise exception 'Escribe tu nombre completo: nombre y al menos un apellido.';
+  end if;
+  if length(v) > 80 then raise exception 'Ese nombre está demasiado largo.'; end if;
+  if exists (select 1 from public.jovenes
+              where lower(trim(nombre)) = lower(v) and perfil_id is distinct from auth.uid()) then
+    raise exception 'Ya hay alguien con ese nombre en la lista. Si eres tú, pídele al encargado de asistencia que junte las fichas.';
+  end if;
+  update public.perfiles set nombre = v where id = auth.uid();
+  update public.jovenes  set nombre = v where perfil_id = auth.uid();
+end $$;
+revoke all on function public.cambiar_mi_nombre(text) from public;
+grant execute on function public.cambiar_mi_nombre(text) to authenticated;
+
+create or replace function public.borrar_mi_cuenta()
+returns void language plpgsql security definer set search_path = public as $$
+declare yo uuid := auth.uid();
+begin
+  if yo is null then raise exception 'Inicia sesión primero.'; end if;
+  if exists (select 1 from public.perfiles where id = yo and rol = 'admin')
+     and (select count(*) from public.perfiles where rol = 'admin') <= 1 then
+    raise exception 'Eres el único admin. Nombra a otro admin antes de borrar tu cuenta.';
+  end if;
+  -- La ficha se queda sin datos de contacto
+  update public.jovenes set email = null, telefono = null, perfil_id = null where perfil_id = yo;
+  -- Los movimientos que registró quedan como "registrado por: (cuenta borrada)" sin brincarse el candado a mano
+  perform set_config('jovenes.fusion', 'si', true);
+  delete from auth.users where id = yo;
+end $$;
+revoke all on function public.borrar_mi_cuenta() from public;
+grant execute on function public.borrar_mi_cuenta() to authenticated;

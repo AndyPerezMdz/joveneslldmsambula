@@ -81,8 +81,11 @@ export function Menu({ items, nombre }: { items: ItemMenu[]; nombre: string }) {
         </nav>
         <div className="relative border-t border-white/10 p-3">
           <div className="flex items-center gap-2.5 px-2 py-2">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-oro-claro to-oro text-sm font-bold text-marca-oscuro">{inicial}</span>
-            <span className="min-w-0 flex-1 truncate text-sm text-white/85">{nombre}</span>
+            <Link href="/cuenta" title="Mi cuenta"
+              className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-xl transition hover:text-white ${path.startsWith("/cuenta") ? "text-white" : "text-white/85"}`}>
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-oro-claro to-oro text-sm font-bold text-marca-oscuro">{inicial}</span>
+              <span className="min-w-0 flex-1 truncate text-sm">{nombre}</span>
+            </Link>
             <BotonTema />
           </div>
           <Salir conTexto />
@@ -95,7 +98,8 @@ export function Menu({ items, nombre }: { items: ItemMenu[]; nombre: string }) {
           <Marca />
           <div className="ml-auto flex items-center gap-1">
             <BotonTema />
-            <span className="flex size-8 items-center justify-center rounded-full bg-gradient-to-b from-oro-claro to-oro text-sm font-bold text-marca-oscuro" title={nombre}>{inicial}</span>
+            <Link href="/cuenta" aria-label="Mi cuenta" title={nombre}
+              className="flex size-8 items-center justify-center rounded-full bg-gradient-to-b from-oro-claro to-oro text-sm font-bold text-marca-oscuro">{inicial}</Link>
           </div>
         </div>
       </header>
@@ -127,7 +131,11 @@ export function Menu({ items, nombre }: { items: ItemMenu[]; nombre: string }) {
           <div onClick={(e) => e.stopPropagation()}
             className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-marca p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] text-white [animation:entrar_.2s_ease-out]">
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/25" />
-            <p className="px-3 pb-2 text-sm text-white/60">{nombre}</p>
+            <Link href="/cuenta" onClick={() => setMas(false)}
+              className="flex items-center gap-3 rounded-xl px-3 py-3 text-[15px] hover:bg-white/10">
+              <span className="flex size-6 items-center justify-center rounded-full bg-gradient-to-b from-oro-claro to-oro text-xs font-bold text-marca-oscuro">{inicial}</span>
+              <span className="min-w-0 flex-1 truncate">Mi cuenta <span className="text-white/50">· {nombre}</span></span>
+            </Link>
             {resto.map((it) => {
               const Ic = ICONOS[it.icono];
               return (

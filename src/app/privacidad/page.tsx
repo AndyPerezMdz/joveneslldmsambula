@@ -35,8 +35,9 @@ export default function Privacidad() {
         </section>
         <section>
           <h2 className="font-semibold text-titulo">Borrar tus datos</h2>
-          <p className="mt-1">Si quieres que se borre tu información o tus fotos, pídelo a los encargados del
-            grupo o escribe a jovenessambula@gmail.com.</p>
+          <p className="mt-1">Puedes borrar tu cuenta tú mismo en <b>Mi cuenta</b>: se borran tu acceso, tu correo y tu
+            teléfono. Tu nombre, asistencia y cooperaciones se quedan en los registros del grupo. Si quieres que se
+            borre algo más o tus fotos, pídelo a los encargados o escribe a jovenessambula@gmail.com.</p>
         </section>
       </div>
     </main>
